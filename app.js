@@ -3,7 +3,22 @@ const mysql = require('mysql2');
 const session = require('express-session');
 const flash = require('connect-flash');
 const multer = require('multer');
+const createHomeController = require('./controllers/homeController');
+const createAuthController = require('./controllers/authController');
+const createShoppingController = require('./controllers/shoppingController');
+const createCartController = require('./controllers/cartController');
+const createProductController = require('./controllers/productController');
+const createReviewController = require('./controllers/reviewController');
+const createAdminController = require('./controllers/adminController');
 const app = express();
+
+const PRIMARY_ADMIN_EMAIL = '24046565@myrp.edu.sg';
+const PRIMARY_ADMIN_PASSWORD = '1234567';
+const PRIMARY_ADMIN_PROFILE = {
+    username: 'Supermarket Director',
+    address: 'Republic Polytechnic',
+    contact: '00000000'
+};
 
 // Lightweight copy deck to enrich produce cards without extra DB columns
 const productShowcaseCopy = {
@@ -48,6 +63,27 @@ const productShowcaseCopy = {
         tastingNotes: 'Sweet with balanced acidity.',
         highlights: ['Naturally ripened', 'Perfect for roasting'],
         accentColor: 'danger'
+    },
+    oranges: {
+        tagline: 'Citrus sunshine',
+        description: 'Zesty, juicy oranges ideal for fresh juice or brightening up breakfast.',
+        tastingNotes: 'Refreshing acidity with natural sweetness.',
+        highlights: ['Vitamin C boost', 'Perfect for juicing'],
+        accentColor: 'warning'
+    },
+    durian: {
+        tagline: 'King of fruits',
+        description: 'Creamy, aromatic durian for bold dessert experiments and durian fans alike.',
+        tastingNotes: 'Custardy texture with deep, complex aroma.',
+        highlights: ['Premium grade', 'Chilled delivery'],
+        accentColor: 'secondary'
+    },
+    blueberries: {
+        tagline: 'Berry burst',
+        description: 'Plump blueberries that sweeten smoothies, pancakes and yoghurts.',
+        tastingNotes: 'Sweet with a lively tart finish.',
+        highlights: ['Great for cereals', 'Easy grab-and-go snack'],
+        accentColor: 'primary'
     }
 };
 
@@ -66,9 +102,13 @@ const decorateProduct = (productRow = {}) => {
     const copy = productShowcaseCopy[key] || {};
     const priceNumber = Number(productRow.price || 0);
     const ratingValue = Number(productRow.averageRating || 0);
+    const status = productRow.status || (Number(productRow.quantity) > 0 ? 'in_stock' : 'sold_out');
+    const isSoldOut = status === 'sold_out' || Number(productRow.quantity) <= 0;
 
     return {
         ...productRow,
+        status,
+        isSoldOut,
         showcaseTag: copy.tagline || 'Fresh pick',
         accentColor: copy.accentColor || 'success',
         shortDescription: productRow.description || copy.description || 'Freshly picked produce from trusted growers.',
@@ -125,6 +165,123 @@ const ensureReviewInfrastructure = () => {
     });
 };
 
+const ensureProductStatusColumn = (done = () => {}) => {
+    const columnCheckSQL = `
+        SELECT COUNT(*) AS columnExists
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'products'
+        AND COLUMN_NAME = 'status'
+    `;
+
+    connection.query(columnCheckSQL, (checkErr, results = []) => {
+        if (checkErr) {
+            console.error('Unable to validate product status column:', checkErr);
+            return done();
+        }
+
+        const hasStatusColumn = results[0] && results[0].columnExists;
+        if (hasStatusColumn) {
+            return connection.query('UPDATE products SET status = "in_stock" WHERE status IS NULL', (updateErr) => {
+                if (updateErr) {
+                    console.error('Unable to hydrate product status values:', updateErr);
+                } else {
+                    console.log('Product status column ready');
+                }
+                done();
+            });
+        }
+
+        const alterProductSQL = `
+            ALTER TABLE products
+            ADD COLUMN status ENUM('in_stock', 'sold_out') NOT NULL DEFAULT 'in_stock'
+        `;
+
+        connection.query(alterProductSQL, (error) => {
+            if (error) {
+                console.error('Unable to ensure product status column exists:', error);
+            } else {
+                console.log('Product status column added');
+            }
+            if (!error) {
+                done();
+            }
+        });
+    });
+};
+
+const ensureShowcaseProducts = () => {
+    const showcaseProducts = [
+        { productName: 'Oranges', quantity: 60, price: 3.5, image: 'oranges.jpg', status: 'in_stock' },
+        { productName: 'Durian', quantity: 18, price: 18.0, image: 'durian.jpg', status: 'in_stock' },
+        { productName: 'Blueberries', quantity: 45, price: 4.9, image: 'blueberry.jpg', status: 'in_stock' }
+    ];
+
+    const productNames = showcaseProducts.map((item) => item.productName);
+    const existingSQL = 'SELECT productName FROM products WHERE productName IN (?)';
+
+    connection.query(existingSQL, [productNames], (existingErr, existingResults = []) => {
+        if (existingErr) {
+            return console.error('Unable to verify showcase products:', existingErr);
+        }
+
+        const existingNames = new Set(existingResults.map((row) => (row.productName || '').toLowerCase()));
+        const missingProducts = showcaseProducts.filter(
+            (item) => !existingNames.has(item.productName.toLowerCase())
+        );
+
+        if (!missingProducts.length) {
+            return;
+        }
+
+        const placeholders = missingProducts.map(() => '(?, ?, ?, ?, ?)').join(', ');
+        const values = missingProducts.flatMap((item) => [
+            item.productName,
+            item.quantity,
+            item.price,
+            item.image,
+            item.status
+        ]);
+
+        const insertSQL = `INSERT INTO products (productName, quantity, price, image, status) VALUES ${placeholders}`;
+
+        connection.query(insertSQL, values, (insertErr) => {
+            if (insertErr) {
+                console.error('Unable to seed showcase products:', insertErr);
+            } else {
+                console.log(`Seeded showcase products: ${missingProducts.map((item) => item.productName).join(', ')}`);
+            }
+        });
+    });
+};
+
+const ensurePrimaryAdmin = () => {
+    const insertPrimaryAdminSQL = `
+        INSERT INTO users (username, email, password, address, contact, role)
+        SELECT ?, ?, SHA1(?), ?, ?, 'admin'
+        WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = ?)
+    `;
+
+    connection.query(
+        insertPrimaryAdminSQL,
+        [
+            PRIMARY_ADMIN_PROFILE.username,
+            PRIMARY_ADMIN_EMAIL,
+            PRIMARY_ADMIN_PASSWORD,
+            PRIMARY_ADMIN_PROFILE.address,
+            PRIMARY_ADMIN_PROFILE.contact,
+            PRIMARY_ADMIN_EMAIL
+        ],
+        (error) => {
+            if (error) {
+                console.error('Unable to seed the primary admin account:', error);
+            } else {
+                console.log('Primary admin account verified or created.');
+            }
+        }
+    );
+};
+
 connection.connect((err) => {
     if (err) {
         console.error('Error connecting to MySQL:', err);
@@ -132,6 +289,40 @@ connection.connect((err) => {
     }
     console.log('Connected to MySQL database');
     ensureReviewInfrastructure();
+    ensureProductStatusColumn(() => {
+        ensureShowcaseProducts();
+    });
+    ensurePrimaryAdmin();
+});
+
+const homeController = createHomeController({
+    connection,
+    heroCopy,
+    decorateProduct
+});
+
+const authController = createAuthController({
+    connection,
+    primaryAdminEmail: PRIMARY_ADMIN_EMAIL
+});
+
+const shoppingController = createShoppingController({
+    connection,
+    decorateProduct
+});
+
+const cartController = createCartController({ connection });
+
+const productController = createProductController({
+    connection,
+    decorateProduct
+});
+
+const reviewController = createReviewController({ connection });
+
+const adminController = createAdminController({
+    connection,
+    primaryAdminEmail: PRIMARY_ADMIN_EMAIL
 });
 
 // Set up view engine
@@ -166,357 +357,92 @@ const checkAuthenticated = (req, res, next) => {
 
 // Middleware to check if user is admin
 const checkAdmin = (req, res, next) => {
-    if (req.session.user.role === 'admin') {
+    if (req.session.user && req.session.user.role === 'admin') {
         return next();
-    } else {
-        req.flash('error', 'Access denied');
-        res.redirect('/shopping');
     }
+    req.flash('error', 'Access denied');
+    res.redirect('/shopping');
+};
+
+const checkPrimaryAdmin = (req, res, next) => {
+    if (req.session.user && req.session.user.email === PRIMARY_ADMIN_EMAIL) {
+        return next();
+    }
+    req.flash('error', 'Only the primary admin can perform that action.');
+    res.redirect('/inventory');
+};
+
+const requireShopper = (req, res, next) => {
+    const sessionUser = req.session.user;
+    const referer = req.get('referer');
+
+    if (!sessionUser) {
+        req.flash('error', 'Please log in or register (username, email, password, address, contact number) to add items to your cart.');
+        return res.redirect('/login');
+    }
+
+    if (sessionUser.role !== 'user') {
+        req.flash('error', 'Switch to a shopper account to perform this action.');
+        return res.redirect(referer || '/shopping');
+    }
+
+    return next();
 };
 
 // Middleware for form validation
 const validateRegistration = (req, res, next) => {
-    const { username, email, password, address, contact, role } = req.body;
+    const { username, email, password, address, contact } = req.body;
 
-    if (!username || !email || !password || !address || !contact || !role) {
+    if (!username || !email || !password || !address || !contact) {
         return res.status(400).send('All fields are required.');
     }
     
     if (password.length < 6) {
         req.flash('error', 'Password should be at least 6 or more characters long');
-        req.flash('formData', req.body);
+        const formData = { ...req.body };
+        delete formData.password;
+        req.flash('formData', formData);
         return res.redirect('/register');
     }
     next();
 };
 
 // Define routes
-app.get('/', (req, res) => {
-    const featuredSQL = `
-        SELECT p.*, COALESCE(AVG(r.rating), 0) AS averageRating, COUNT(r.id) AS reviewCount
-        FROM products p
-        LEFT JOIN product_reviews r ON r.product_id = p.id
-        GROUP BY p.id
-        ORDER BY p.productName ASC
-        LIMIT 8
-    `;
+app.get('/', homeController.renderHomePage);
 
-    connection.query(featuredSQL, (error, results) => {
-        if (error) {
-            console.error('Unable to load featured products:', error);
-            return res.render('index', {
-                user: req.session.user,
-                featuredProducts: [],
-                heroCopy,
-                alerts: ['We are refreshing our shelves. Please check back shortly!']
-            });
-        }
+app.get('/inventory', checkAuthenticated, checkAdmin, productController.renderInventory);
 
-        const featuredProducts = results.map(decorateProduct);
-        res.render('index', {
-            user: req.session.user,
-            featuredProducts,
-            heroCopy,
-            alerts: []
-        });
-    });
-});
+app.get('/register', authController.renderRegister);
+app.post('/register', validateRegistration, authController.handleRegistration);
 
-app.get('/inventory', checkAuthenticated, checkAdmin, (req, res) => {
-    // Fetch data from MySQL
-    connection.query('SELECT * FROM products', (error, results) => {
-      if (error) throw error;
-      res.render('inventory', { products: results, user: req.session.user });
-    });
-});
+app.get('/login', authController.renderLogin);
+app.post('/login', authController.handleLogin);
+app.get('/profile', checkAuthenticated, authController.renderProfile);
+app.post('/profile', checkAuthenticated, authController.updateProfile);
 
-app.get('/register', (req, res) => {
-    res.render('register', { messages: req.flash('error'), formData: req.flash('formData')[0] });
-});
+app.get('/shopping', shoppingController.renderShopping);
+app.post('/add-to-cart/:id', requireShopper, cartController.addToCart);
 
-app.post('/register', validateRegistration, (req, res) => {
+app.get('/cart', requireShopper, cartController.renderCart);
+app.post('/cart/update/:id', requireShopper, cartController.updateCartItem);
+app.post('/cart/delete/:id', requireShopper, cartController.deleteCartItem);
+app.get('/logout', authController.logout);
 
-    const { username, email, password, address, contact, role } = req.body;
+app.get('/product/:id', productController.renderProductDetails);
+app.post('/product/:id/reviews', requireShopper, reviewController.submitProductReview);
 
-    const sql = 'INSERT INTO users (username, email, password, address, contact, role) VALUES (?, ?, SHA1(?), ?, ?, ?)';
-    connection.query(sql, [username, email, password, address, contact, role], (err, result) => {
-        if (err) {
-            throw err;
-        }
-        console.log(result);
-        req.flash('success', 'Registration successful! Please log in.');
-        res.redirect('/login');
-    });
-});
+app.get('/addProduct', checkAuthenticated, checkAdmin, productController.renderAddProductForm);
+app.post('/addProduct', checkAuthenticated, checkAdmin, upload.single('image'), productController.createProduct);
 
-app.get('/login', (req, res) => {
-    res.render('login', { messages: req.flash('success'), errors: req.flash('error') });
-});
+app.get('/updateProduct/:id', checkAuthenticated, checkAdmin, productController.renderUpdateProductForm);
+app.post('/updateProduct/:id', checkAuthenticated, checkAdmin, upload.single('image'), productController.updateProduct);
 
-app.post('/login', (req, res) => {
-    const { email, password } = req.body;
+app.get('/deleteProduct/:id', checkAuthenticated, checkAdmin, productController.deleteProduct);
 
-    // Validate email and password
-    if (!email || !password) {
-        req.flash('error', 'All fields are required.');
-        return res.redirect('/login');
-    }
-
-    const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?)';
-    connection.query(sql, [email, password], (err, results) => {
-        if (err) {
-            throw err;
-        }
-
-        if (results.length > 0) {
-            // Successful login
-            req.session.user = results[0]; 
-            req.flash('success', 'Login successful!');
-            if(req.session.user.role == 'user')
-                res.redirect('/shopping');
-            else
-                res.redirect('/inventory');
-        } else {
-            // Invalid credentials
-            req.flash('error', 'Invalid email or password.');
-            res.redirect('/login');
-        }
-    });
-});
-
-app.get('/shopping', checkAuthenticated, (req, res) => {
-    // Fetch data from MySQL
-    connection.query('SELECT * FROM products', (error, results) => {
-        if (error) throw error;
-        res.render('shopping', { user: req.session.user, products: results });
-      });
-});
-
-app.post('/add-to-cart/:id', checkAuthenticated, (req, res) => {
-    const productId = parseInt(req.params.id);
-    const quantity = parseInt(req.body.quantity) || 1;
-
-    connection.query('SELECT * FROM products WHERE id = ?', [productId], (error, results) => {
-        if (error) throw error;
-
-        if (results.length > 0) {
-            const product = results[0];
-
-            // Initialize cart in session if not exists
-            if (!req.session.cart) {
-                req.session.cart = [];
-            }
-
-            // Check if product already in cart
-            const existingItem = req.session.cart.find(item => item.productId === productId);
-            if (existingItem) {
-                existingItem.quantity += quantity;
-            } else {
-                req.session.cart.push({
-                    id: product.productId,
-                    productName: product.productName,
-                    price: product.price,
-                    quantity: quantity,
-                    image: product.image
-                });
-            }
-
-            res.redirect('/cart');
-        } else {
-            res.status(404).send("Product not found");
-        }
-    });
-});
-
-app.get('/cart', checkAuthenticated, (req, res) => {
-    const cart = req.session.cart || [];
-    res.render('cart', { cart, user: req.session.user });
-});
-
-app.get('/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/');
-});
-
-app.get('/product/:id', checkAuthenticated, (req, res) => {
-    const productId = parseInt(req.params.id, 10);
-    const singleProductSQL = `
-        SELECT p.*, COALESCE(AVG(r.rating), 0) AS averageRating, COUNT(r.id) AS reviewCount
-        FROM products p
-        LEFT JOIN product_reviews r ON r.product_id = p.id
-        WHERE p.id = ?
-        GROUP BY p.id
-    `;
-
-    connection.query(singleProductSQL, [productId], (error, productResults) => {
-        if (error) {
-            console.error('Unable to fetch product details:', error);
-            return res.status(500).send('Unable to load product right now.');
-        }
-
-        if (!productResults.length) {
-            return res.status(404).send('Product not found');
-        }
-
-        const product = decorateProduct(productResults[0]);
-        const reviewsSQL = `
-            SELECT r.id, r.rating, r.review, r.created_at, r.updated_at, r.user_id, u.username, u.role
-            FROM product_reviews r
-            INNER JOIN users u ON u.id = r.user_id
-            WHERE r.product_id = ?
-            ORDER BY r.updated_at DESC
-        `;
-
-        connection.query(reviewsSQL, [productId], (reviewErr, reviewResults) => {
-            if (reviewErr) {
-                console.error('Unable to fetch reviews:', reviewErr);
-                return res.status(500).send('Unable to load product reviews right now.');
-            }
-
-            const ratingBuckets = [5, 4, 3, 2, 1].map((stars) => ({
-                stars,
-                count: reviewResults.filter((review) => review.rating === stars).length
-            }));
-
-            const userReview = reviewResults.find((review) => review.user_id === req.session.user.id);
-
-            res.render('product', {
-                product,
-                user: req.session.user,
-                reviews: reviewResults,
-                reviewSummary: {
-                    total: reviewResults.length,
-                    buckets: ratingBuckets
-                },
-                userReview,
-                canReview: req.session.user.role === 'user',
-                messages: {
-                    errors: req.flash('error'),
-                    success: req.flash('success')
-                }
-            });
-        });
-    });
-});
-
-app.post('/product/:id/reviews', checkAuthenticated, (req, res) => {
-    const productId = parseInt(req.params.id, 10);
-    const { rating, reviewText } = req.body;
-
-    if (req.session.user.role !== 'user') {
-        req.flash('error', 'Only registered shoppers can submit reviews.');
-        return res.redirect(`/product/${productId}#reviews`);
-    }
-
-    const numericRating = Math.max(1, Math.min(5, parseInt(rating, 10) || 0));
-    if (!numericRating) {
-        req.flash('error', 'Please choose a rating between 1 and 5 stars.');
-        return res.redirect(`/product/${productId}#review-form`);
-    }
-
-    const sanitizedReview = reviewText ? reviewText.trim() : '';
-    const upsertSQL = `
-        INSERT INTO product_reviews (product_id, user_id, rating, review)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE rating = VALUES(rating), review = VALUES(review), updated_at = CURRENT_TIMESTAMP
-    `;
-
-    connection.query(upsertSQL, [productId, req.session.user.id, numericRating, sanitizedReview], (error) => {
-        if (error) {
-            console.error('Unable to save review:', error);
-            req.flash('error', 'We could not save your review right now. Please try again later.');
-        } else {
-            req.flash('success', 'Thanks for sharing your thoughts with the community!');
-        }
-
-        res.redirect(`/product/${productId}#reviews`);
-    });
-});
-
-app.get('/addProduct', checkAuthenticated, checkAdmin, (req, res) => {
-    res.render('addProduct', {user: req.session.user } ); 
-});
-
-app.post('/addProduct', upload.single('image'),  (req, res) => {
-    // Extract product data from the request body
-    const { name, quantity, price} = req.body;
-    let image;
-    if (req.file) {
-        image = req.file.filename; // Save only the filename
-    } else {
-        image = null;
-    }
-
-    const sql = 'INSERT INTO products (productName, quantity, price, image) VALUES (?, ?, ?, ?)';
-    // Insert the new product into the database
-    connection.query(sql , [name, quantity, price, image], (error, results) => {
-        if (error) {
-            // Handle any error that occurs during the database operation
-            console.error("Error adding product:", error);
-            res.status(500).send('Error adding product');
-        } else {
-            // Send a success response
-            res.redirect('/inventory');
-        }
-    });
-});
-
-app.get('/updateProduct/:id',checkAuthenticated, checkAdmin, (req,res) => {
-    const productId = req.params.id;
-    const sql = 'SELECT * FROM products WHERE id = ?';
-
-    // Fetch data from MySQL based on the product ID
-    connection.query(sql , [productId], (error, results) => {
-        if (error) throw error;
-
-        // Check if any product with the given ID was found
-        if (results.length > 0) {
-            // Render HTML page with the product data
-            res.render('updateProduct', { product: results[0] });
-        } else {
-            // If no product with the given ID was found, render a 404 page or handle it accordingly
-            res.status(404).send('Product not found');
-        }
-    });
-});
-
-app.post('/updateProduct/:id', upload.single('image'), (req, res) => {
-    const productId = req.params.id;
-    // Extract product data from the request body
-    const { name, quantity, price } = req.body;
-    let image  = req.body.currentImage; //retrieve current image filename
-    if (req.file) { //if new image is uploaded
-        image = req.file.filename; // set image to be new image filename
-    } 
-
-    const sql = 'UPDATE products SET productName = ? , quantity = ?, price = ?, image =? WHERE id = ?';
-    // Insert the new product into the database
-    connection.query(sql, [name, quantity, price, image, productId], (error, results) => {
-        if (error) {
-            // Handle any error that occurs during the database operation
-            console.error("Error updating product:", error);
-            res.status(500).send('Error updating product');
-        } else {
-            // Send a success response
-            res.redirect('/inventory');
-        }
-    });
-});
-
-app.get('/deleteProduct/:id', (req, res) => {
-    const productId = req.params.id;
-
-    connection.query('DELETE FROM products WHERE id = ?', [productId], (error, results) => {
-        if (error) {
-            // Handle any error that occurs during the database operation
-            console.error("Error deleting product:", error);
-            res.status(500).send('Error deleting product');
-        } else {
-            // Send a success response
-            res.redirect('/inventory');
-        }
-    });
-});
+app.get('/admin/users', checkAuthenticated, checkAdmin, adminController.renderUserManagement);
+app.post('/admin/users', checkAuthenticated, checkAdmin, adminController.createUser);
+app.post('/admin/users/:id/promote', checkAuthenticated, checkAdmin, adminController.promoteUser);
+app.post('/admin/users/:id/delete', checkAuthenticated, checkAdmin, adminController.deleteUser);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

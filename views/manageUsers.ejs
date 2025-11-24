@@ -1,0 +1,127 @@
+<%- include('partials/header', { pageTitle: 'Manage Users', user }) %>
+
+<div class="container py-4">
+  <h1 class="mb-4">Manage User Roles</h1>
+  <% const userForm = formData || {}; %>
+
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success">
+      <% messages.success.forEach(function(msg) { %>
+        <p class="mb-0"><%= msg %></p>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger">
+      <% messages.error.forEach(function(msg) { %>
+        <p class="mb-0"><%= msg %></p>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Add a new account</h5>
+      <p class="text-muted small mb-3">Admins can create shopper or admin accounts. Passwords must be at least 6 characters.</p>
+      <form action="/admin/users" method="POST" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="newUsername">Username</label>
+          <input type="text" id="newUsername" name="username" class="form-control" required value="<%= userForm.username || '' %>">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="newEmail">Email</label>
+          <input type="email" id="newEmail" name="email" class="form-control" required value="<%= userForm.email || '' %>">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="newPassword">Password</label>
+          <input type="password" id="newPassword" name="password" class="form-control" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="newRole">Role</label>
+          <select id="newRole" name="role" class="form-select">
+            <option value="user" <%= userForm.role === 'admin' ? '' : 'selected' %>>Shopper</option>
+            <option value="admin" <%= userForm.role === 'admin' ? 'selected' : '' %>>Admin</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="newAddress">Address</label>
+          <input type="text" id="newAddress" name="address" class="form-control" required value="<%= userForm.address || '' %>">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="newContact">Contact Number</label>
+          <input type="text" id="newContact" name="contact" class="form-control" required value="<%= userForm.contact || '' %>">
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">Create account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Actions</th>
+          <th>Delete</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!users.length) { %>
+          <tr>
+            <td colspan="6" class="text-center text-muted">No users found.</td>
+          </tr>
+        <% } %>
+        <% users.forEach(function(account, index) { 
+             const isPrimary = account.email === primaryAdminEmail;
+             const isSelf = account.id === user.id;
+        %>
+          <tr>
+            <td><%= index + 1 %></td>
+            <td><%= account.username %></td>
+            <td><%= account.email %></td>
+            <td>
+              <% if (isPrimary) { %>
+                <span class="badge bg-warning text-dark">Primary Admin</span>
+              <% } else if (account.role === 'admin') { %>
+                <span class="badge bg-success">Admin</span>
+              <% } else { %>
+                <span class="badge bg-secondary">User</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (isPrimary) { %>
+                <span class="text-muted small">This admin cannot be modified.</span>
+              <% } else if (account.role === 'admin') { %>
+                <span class="text-muted small">Already an admin</span>
+              <% } else { %>
+                <form action="/admin/users/<%= account.id %>/promote" method="POST" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-primary">Promote to admin</button>
+                </form>
+              <% } %>
+            </td>
+            <td>
+              <% if (isPrimary) { %>
+                <span class="text-muted small">Protected</span>
+              <% } else if (isSelf) { %>
+                <span class="text-muted small">Signed-in account</span>
+              <% } else { %>
+                <form action="/admin/users/<%= account.id %>/delete" method="POST" class="d-inline" onsubmit="return confirm('Delete this account? This cannot be undone.');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('partials/quickNav', { user, backToHref: '/inventory', backToLabel: 'Back to inventory' }) %>
+<%- include('partials/footer') %>

@@ -1,0 +1,14 @@
+<%
+  const resolvedExtraScripts = typeof extraScripts === 'string' ? extraScripts : '';
+%>
+  <footer class="bg-dark text-white text-center py-4 mt-5">
+    <div class="container">
+      <p class="mb-0">&copy; <%= new Date().getFullYear() %> Supermarket App. All rights reserved.</p>
+      <small class="text-white-50">Fresh groceries, smarter shopping.</small>
+    </div>
+  </footer>
+  <% if (resolvedExtraScripts) { %>
+    <%- resolvedExtraScripts %>
+  <% } %>
+</body>
+</html>
