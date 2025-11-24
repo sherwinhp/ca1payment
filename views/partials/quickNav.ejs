@@ -1,0 +1,62 @@
+<style>
+  .quick-nav {
+    position: fixed;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1000;
+  }
+  .quick-nav a {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: 999px;
+    background-color: #ffffff;
+    border: 1px solid #ced4da;
+    font-size: 0.9rem;
+    text-align: center;
+    text-decoration: none;
+    color: #0f172a;
+  }
+  .quick-nav a:hover {
+    background-color: #0f172a;
+    color: #ffffff;
+  }
+  @media(max-width: 991px) {
+    .quick-nav {
+      position: static;
+      transform: none;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 1.5rem 0;
+    }
+    .quick-nav a {
+      flex: 1 0 45%;
+    }
+  }
+</style>
+
+<div class="quick-nav">
+  <% if (backToHref) { %>
+    <a href="<%= backToHref %>"><%= backToLabel || 'Go back' %></a>
+  <% } %>
+  <a href="/">Home</a>
+
+  <% if (user) { %>
+    <% if (user.role === 'admin') { %>
+      <a href="/inventory">Inventory</a>
+      <a href="/addProduct">Add Product</a>
+      <a href="/shopping">Preview Store</a>
+    <% } else { %>
+      <a href="/shopping">Shop</a>
+      <a href="/cart">Cart</a>
+    <% } %>
+    <a href="/logout">Logout</a>
+  <% } else { %>
+    <a href="/register">Register</a>
+    <a href="/login">Login</a>
+  <% } %>
+</div>

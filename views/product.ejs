@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <title><%= product.productName %> &middot; Supermarket App</title>
+    <style>
+        body {
+            background-color: #f4f6fb;
+            color: #0f172a;
+        }
+        .rating-stars span {
+            font-size: 1.1rem;
+            color: #f6c343;
+        }
+        .detail-card {
+            border-radius: 24px;
+            border: none;
+            box-shadow: 0 25px 45px rgba(15, 23, 42, 0.08);
+        }
+        .review-card {
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 20px 30px rgba(15, 23, 42, 0.06);
+        }
+        .rating-input input {
+            display: none;
+        }
+        .rating-input label {
+            font-size: 1.75rem;
+            color: #cbd5f5;
+            cursor: pointer;
+        }
+        .rating-input input:checked ~ label,
+        .rating-input label:hover,
+        .rating-input label:hover ~ label {
+            color: #f6c343;
+        }
+        .progress {
+            height: 8px;
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body>
+    <% const isAdmin = user.role === 'admin'; %>
+    <% const ratingValue = typeof product.ratingValue === 'number' ? product.ratingValue : (parseFloat(product.averageRating) || 0); %>
+    <% const reviewTotal = reviewSummary ? reviewSummary.total : (product.reviewCount || 0); %>
+    <% const highlights = Array.isArray(product.highlights) ? product.highlights : []; %>
+    <% const tastingNotes = product.tastingNotes || 'Taste the freshness in every bite.'; %>
+    <% const cardsPerks = highlights.length ? highlights : ['Sustainably sourced', 'Ready for checkout']; %>
+    <% const ratingBuckets = reviewSummary ? reviewSummary.buckets : []; %>
+    <% const reviewList = Array.isArray(reviews) ? reviews : []; %>
+    <% const formattedPrice = product.price ? Number(product.price).toFixed(2) : '0.00'; %>
+    <% const canAddToCart = user.role === 'user' && Number(product.quantity) > 0; %>
+    <% const productImage = product.image ? `/images/${product.image}` : 'https://images.unsplash.com/photo-1502740479091-635887520276?auto=format&fit=crop&w=800&q=80'; %>
+    <nav class="navbar navbar-expand-sm bg-dark navbar-dark">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/">Supermarket App</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#collapsibleNavbar">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="collapsibleNavbar">
+            <ul class="navbar-nav ms-auto">
+              <% if (isAdmin) { %>
+                <li class="nav-item">
+                    <a class="nav-link" href="/inventory">Inventory</a>
+                </li>
+              <% } else { %>
+                <li class="nav-item">
+                    <a class="nav-link" href="/shopping">Shop</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/cart">Cart</a>
+                </li>
+              <% } %>
+              <li class="nav-item">
+                <a class="nav-link" href="/logout">Logout</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        <a href="<%= isAdmin ? '/inventory' : '/shopping' %>" class="text-decoration-none text-muted small">&larr; Back to <%= isAdmin ? 'inventory' : 'shopping' %></a>
+
+        <div class="row align-items-center gy-4 mt-2">
+            <div class="col-lg-5">
+                <div class="ratio ratio-4x3 rounded-4 overflow-hidden bg-white shadow">
+                    <img src="<%= productImage %>" alt="<%= product.productName %>" class="w-100 h-100" style="object-fit: cover;">
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card detail-card p-4">
+                    <span class="badge bg-success-subtle text-success mb-2 text-uppercase fw-semibold"><%= product.showcaseTag || 'Fresh pick' %></span>
+                    <h1 class="fw-bold"><%= product.productName %></h1>
+                    <p class="text-muted mb-4"><%= product.shortDescription %></p>
+                    <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+                        <div class="rating-stars">
+                            <% for (let i = 0; i < Math.round(ratingValue); i++) { %>
+                                <span>&#9733;</span>
+                            <% } %>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-4"><%= ratingValue ? ratingValue.toFixed(1) : 'New' %><span class="fs-6 text-muted"> / 5</span></div>
+                            <p class="text-muted small mb-0"><%= reviewTotal ? reviewTotal : 'No' %> review<%= reviewTotal === 1 ? '' : 's' %></p>
+                        </div>
+                        <div class="vr"></div>
+                        <div>
+                            <p class="text-muted small mb-1">In stock</p>
+                            <h5 class="mb-0"><%= product.quantity %> packs</h5>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-baseline gap-2 mb-3">
+                        <div class="display-6 fw-bold">$<%= formattedPrice %></div>
+                        <span class="text-muted">per pack</span>
+                    </div>
+                    <p class="text-muted mb-4"><strong>Tasting notes:</strong> <%= tastingNotes %></p>
+                    <div class="d-flex flex-wrap gap-2 mb-4">
+                        <% cardsPerks.forEach((perk) => { %>
+                            <span class="badge rounded-pill text-bg-light text-dark"><%= perk %></span>
+                        <% }) %>
+                    </div>
+                    <% if (canAddToCart) { %>
+                        <form action="/add-to-cart/<%= product.id %>" method="POST" class="d-flex flex-wrap gap-3">
+                            <div>
+                                <label class="form-label small mb-1">Quantity</label>
+                                <select name="quantity" class="form-select">
+                                    <% for (let q = 1; q <= Math.min(5, Number(product.quantity) || 1); q++) { %>
+                                        <option value="<%= q %>"><%= q %> pack<%= q === 1 ? '' : 's' %></option>
+                                    <% } %>
+                                </select>
+                            </div>
+                            <div class="align-self-end flex-grow-1">
+                                <button type="submit" class="btn btn-primary w-100">Add to cart</button>
+                            </div>
+                        </form>
+                    <% } else if (user.role !== 'user') { %>
+                        <div class="alert alert-info mb-0">Switch to a shopper account to add items to the cart.</div>
+                    <% } else { %>
+                        <div class="alert alert-warning mb-0">Currently out of stock. Check back again soon!</div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <section id="reviews" class="mt-5">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="card h-100 p-4 detail-card">
+                        <h4 class="fw-bold">Review summary</h4>
+                        <p class="text-muted mb-4">Only registered shoppers can leave a review between 1 and 5 stars.</p>
+                        <div class="d-flex align-items-end gap-3 mb-4">
+                            <div class="display-4 fw-bold mb-0"><%= ratingValue ? ratingValue.toFixed(1) : 'New' %></div>
+                            <div class="text-muted mb-1">out of 5</div>
+                        </div>
+                        <p class="text-muted small mb-4"><%= reviewTotal ? `${reviewTotal} verified review${reviewTotal === 1 ? '' : 's'}` : 'No reviews yet' %></p>
+                        <% ratingBuckets.forEach((bucket) => { 
+                            const percent = reviewTotal ? Math.round((bucket.count / reviewTotal) * 100) : 0;
+                        %>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="small text-muted"><%= bucket.stars %> star</span>
+                                <div class="progress flex-grow-1">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: <%= percent %>%;" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <span class="small text-muted"><%= bucket.count %></span>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <% if (messages && messages.success && messages.success.length) { %>
+                        <div class="alert alert-success">
+                            <% messages.success.forEach((msg) => { %>
+                                <div><%= msg %></div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                    <% if (messages && messages.errors && messages.errors.length) { %>
+                        <div class="alert alert-danger">
+                            <% messages.errors.forEach((msg) => { %>
+                                <div><%= msg %></div>
+                            <% }) %>
+                        </div>
+                    <% } %>
+                    <% if (canReview) { %>
+                        <div class="card review-card mb-4 p-4" id="review-form">
+                            <h4 class="fw-bold mb-3"><%= userReview ? 'Update your review' : 'Leave a review' %></h4>
+                            <form action="/product/<%= product.id %>/reviews" method="POST">
+                                <div class="rating-input d-flex flex-row-reverse justify-content-end gap-2 mb-3">
+                                    <% for (let star = 5; star >= 1; star--) { %>
+                                        <input type="radio" id="rating-<%= star %>" name="rating" value="<%= star %>" <%= userReview ? (userReview.rating === star ? 'checked' : '') : (star === 5 ? 'checked' : '') %>>
+                                        <label for="rating-<%= star %>">&#9733;</label>
+                                    <% } %>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="reviewText" class="form-label">Share tasting notes, sweetness level, or serving tips</label>
+                                    <textarea id="reviewText" name="reviewText" class="form-control" rows="4" placeholder="e.g. Sweet and juicy, perfect for breakfast bowls."><%= userReview ? userReview.review : '' %></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100"><%= userReview ? 'Update my review' : 'Share my review' %></button>
+                            </form>
+                        </div>
+                    <% } else { %>
+                        <div class="alert alert-info" id="review-form">Only registered shoppers can leave a review. Switch to a shopper account to share feedback.</div>
+                    <% } %>
+
+                    <h4 class="fw-bold mb-3">What shoppers are saying</h4>
+                    <% if (!reviewList.length) { %>
+                        <div class="alert alert-light border">No reviews yet. Be the first to tell others how this produce tastes!</div>
+                    <% } %>
+                    <% reviewList.forEach((review) => {
+                        const createdAt = new Date(review.updated_at || review.created_at || Date.now());
+                    %>
+                        <div class="card review-card mb-3 p-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-0"><%= review.username %></h6>
+                                    <small class="text-muted"><%= createdAt.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) %></small>
+                                </div>
+                                <div class="rating-stars">
+                                    <% for (let i = 0; i < review.rating; i++) { %>
+                                        <span>&#9733;</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <p class="mt-3 mb-0"><%= review.review || 'No written review provided.' %></p>
+                        </div>
+                    <% }) %>
+                </div>
+            </div>
+        </section>
+    </div>
+    <%- include('partials/quickNav', { user: user, backToHref: '/', backToLabel: 'Back to home' }) %>
+</body>
+</html>
