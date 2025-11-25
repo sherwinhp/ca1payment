@@ -104,7 +104,7 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
     };
 
     const updateProfile = (req, res) => {
-        const { username, email, address, contact, password } = req.body;
+        const { username, email, address, contact, password, oldPassword } = req.body;
         const userId = req.session.user.id;
         const errors = [];
 
@@ -140,34 +140,63 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
             const updateFields = ['username = ?', 'email = ?', 'address = ?', 'contact = ?'];
             const params = [username, email, address, contact];
 
+            const finalizeUpdate = () => {
+                const updateSQL = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+                params.push(userId);
+                connection.query(updateSQL, params, (updateErr) => {
+                    if (updateErr) {
+                        console.error('Unable to update profile:', updateErr);
+                        req.flash('error', 'We could not save your changes. Please try again.');
+                        req.flash('formData', { username, email, address, contact });
+                        return res.redirect('/profile');
+                    }
+
+                    const updatedUser = markPrimaryAdmin({
+                        ...req.session.user,
+                        username,
+                        email,
+                        address,
+                        contact
+                    });
+
+                    req.session.user = updatedUser;
+                    req.flash('success', 'Profile updated successfully.');
+                    res.redirect('/profile');
+                });
+            };
+
             if (password && password.length >= 6) {
-                updateFields.push('password = SHA1(?)');
-                params.push(password);
-            }
-
-            params.push(userId);
-
-            const updateSQL = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-            connection.query(updateSQL, params, (updateErr) => {
-                if (updateErr) {
-                    console.error('Unable to update profile:', updateErr);
-                    req.flash('error', 'We could not save your changes. Please try again.');
+                if (!oldPassword) {
+                    req.flash('error', 'Please provide your current password to change it.');
                     req.flash('formData', { username, email, address, contact });
                     return res.redirect('/profile');
                 }
 
-                const updatedUser = markPrimaryAdmin({
-                    ...req.session.user,
-                    username,
-                    email,
-                    address,
-                    contact
-                });
+                const passwordCheckSQL = 'SELECT password FROM users WHERE id = ?';
+                connection.query(passwordCheckSQL, [userId], (pwErr, pwRows = []) => {
+                    if (pwErr || !pwRows.length) {
+                        console.error('Unable to validate current password:', pwErr);
+                        req.flash('error', 'Unable to update profile right now.');
+                        req.flash('formData', { username, email, address, contact });
+                        return res.redirect('/profile');
+                    }
 
-                req.session.user = updatedUser;
-                req.flash('success', 'Profile updated successfully.');
-                res.redirect('/profile');
-            });
+                    const isMatchSQL = 'SELECT 1 FROM users WHERE id = ? AND password = SHA1(?)';
+                    connection.query(isMatchSQL, [userId, oldPassword], (matchErr, matches = []) => {
+                        if (matchErr || !matches.length) {
+                            req.flash('error', 'Current password is incorrect.');
+                            req.flash('formData', { username, email, address, contact });
+                            return res.redirect('/profile');
+                        }
+
+                        updateFields.push('password = SHA1(?)');
+                        params.push(password);
+                        finalizeUpdate();
+                    });
+                });
+            } else {
+                finalizeUpdate();
+            }
         });
     };
 

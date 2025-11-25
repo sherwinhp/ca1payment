@@ -41,12 +41,14 @@
                   type="number"
                   name="quantity"
                   min="1"
+                  max="<%= item.stock %>"
                   value="<%= item.quantity %>"
                   class="form-control form-control-sm"
                   style="max-width: 90px;"
                   required
                 >
                 <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                <small class="text-muted">Stock: <%= item.stock %></small>
               </form>
             </td>
             <td>$<%= (item.price * item.quantity).toFixed(2) %></td>
@@ -64,6 +66,10 @@
 
     <div class="mt-4">
       <a href="/shopping" class="btn btn-secondary">Back to Shopping</a>
+      <a href="/checkout" class="btn btn-primary ms-2">Proceed to Checkout</a>
+      <form action="/cart/clear" method="POST" class="d-inline ms-2" onsubmit="return confirm('Clear all items from your cart?');">
+        <button type="submit" class="btn btn-outline-danger">Clear cart</button>
+      </form>
     </div>
   <% } %>
 </div>

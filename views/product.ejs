@@ -111,7 +111,8 @@
                             <div>
                                 <label class="form-label small mb-1">Quantity</label>
                                 <select name="quantity" class="form-select">
-                                    <% for (let q = 1; q <= Math.min(5, Number(product.quantity) || 1); q++) { %>
+                                    <% const maxQty = Math.max(1, Number(product.quantity) || 1); %>
+                                    <% for (let q = 1; q <= maxQty; q++) { %>
                                         <option value="<%= q %>"><%= q %> pack<%= q === 1 ? '' : 's' %></option>
                                     <% } %>
                                 </select>
@@ -219,6 +220,22 @@
                                 </div>
                             </div>
                             <p class="mt-3 mb-0"><%= review.review || 'No written review provided.' %></p>
+                            <% if (review.admin_reply) { %>
+                                <div class="alert alert-secondary mt-3 mb-0">
+                                    <strong>Admin reply:</strong> <%= review.admin_reply %>
+                                </div>
+                            <% } %>
+                            <% if (isAdmin) { %>
+                                <div class="d-flex gap-2 mt-3">
+                                    <form action="/admin/reviews/<%= review.id %>/delete" method="POST" onsubmit="return confirm('Delete this review?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    </form>
+                                    <form action="/admin/reviews/<%= review.id %>/reply" method="POST" class="d-flex gap-2 w-100">
+                                        <input type="text" name="reply" class="form-control form-control-sm" placeholder="Reply as admin" value="<%= review.admin_reply || '' %>">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Reply</button>
+                                    </form>
+                                </div>
+                            <% } %>
                         </div>
                     <% }) %>
                 </div>

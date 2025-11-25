@@ -1,0 +1,84 @@
+<%- include('partials/header', { pageTitle: 'Invoice', user }) %>
+<% const adminView = typeof isAdminView !== 'undefined' ? isAdminView : false; %>
+
+<div class="container py-5" style="max-width: 960px;">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">Invoice</h1>
+      <div class="text-muted">Order #<%= order.id %></div>
+      <div class="text-muted">Placed <%= new Date(order.created_at).toLocaleString() %></div>
+      <div class="text-muted">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></div>
+    </div>
+    <div class="text-end">
+      <% if (order.username) { %>
+        <div class="fw-semibold"><%= order.username %></div>
+        <div class="text-muted"><%= order.email %></div>
+        <% if (order.address) { %><div class="text-muted"><%= order.address %></div><% } %>
+        <% if (order.contact) { %><div class="text-muted">Contact: <%= order.contact %></div><% } %>
+      <% } else if (user) { %>
+        <div class="fw-semibold"><%= user.username %></div>
+        <div class="text-muted"><%= user.email %></div>
+      <% } %>
+      <button class="btn btn-outline-secondary btn-sm mt-2" onclick="window.print()">Print</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Image</th>
+              <th>Quantity</th>
+              <th>Price</th>
+              <th>Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% let runningTotal = 0; %>
+            <% items.forEach(function(item) {
+                 const displayName = item.productName || item.product_name_snapshot || 'Product';
+                 const image = item.image || item.product_image_snapshot;
+                 const lineTotal = Number(item.price_at_purchase) * Number(item.quantity);
+                 runningTotal += lineTotal;
+            %>
+              <tr>
+                <td><%= displayName %></td>
+                <td>
+                  <% if (image) { %>
+                    <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="50" class="img-thumbnail">
+                  <% } else { %>
+                    <span class="text-muted">No image</span>
+                  <% } %>
+                </td>
+                <td><%= item.quantity %></td>
+                <td>$<%= Number(item.price_at_purchase).toFixed(2) %></td>
+                <td>$<%= lineTotal.toFixed(2) %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colspan="4" class="text-end">Total</th>
+              <th>$<%= Number(order.total_amount || runningTotal).toFixed(2) %></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="d-flex justify-content-between mt-3">
+        <div class="text-muted">Payment method: <%= order.payment_method %></div>
+        <div>
+          <% if (adminView) { %>
+            <a href="/admin/orders" class="btn btn-outline-secondary btn-sm">Back to orders</a>
+          <% } else { %>
+            <a href="/orders" class="btn btn-outline-secondary btn-sm">Back to history</a>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

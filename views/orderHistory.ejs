@@ -1,0 +1,85 @@
+<%- include('partials/header', { pageTitle: 'Order History', user }) %>
+
+<div class="container py-5">
+  <h2 class="mb-4">Your Orders</h2>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger rounded-3">
+      <% messages.error.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success rounded-3">
+      <% messages.success.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <% if (!orders.length) { %>
+    <p>You have no orders yet.</p>
+    <a href="/shopping" class="btn btn-primary">Start shopping</a>
+  <% } else { %>
+    <div class="row g-3">
+      <% orders.forEach(function(order) { %>
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="fw-bold">Order #<%= order.id %></div>
+                  <small class="text-muted">Placed on <%= new Date(order.created_at).toLocaleString() %></small>
+                </div>
+                <div class="text-end">
+                  <div class="badge bg-primary text-uppercase"><%= order.status %></div>
+                  <div class="fw-bold fs-5 mt-1">$<%= Number(order.total_amount).toFixed(2) %></div>
+                  <small class="text-capitalize text-muted"><%= order.payment_method %></small>
+                  <div class="mt-2">
+                    <a href="/orders/<%= order.id %>/invoice" class="btn btn-sm btn-outline-secondary">View / Print invoice</a>
+                  </div>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Image</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% const items = orderItems[order.id] || []; %>
+                    <% items.forEach(function(item) { 
+                        const displayName = item.productName || item.product_name_snapshot || 'Product';
+                        const image = item.image || item.product_image_snapshot;
+                    %>
+                      <tr>
+                        <td><%= displayName %></td>
+                        <td>
+                          <% if (image) { %>
+                            <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="60" class="img-thumbnail">
+                          <% } else { %>
+                            <span class="text-muted">No image</span>
+                          <% } %>
+                        </td>
+                        <td><%= item.quantity %></td>
+                        <td>$<%= Number(item.price_at_purchase).toFixed(2) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/quickNav', { user, backToHref: '/shopping', backToLabel: 'Back to shop' }) %>
+<%- include('partials/footer') %>

@@ -1,0 +1,106 @@
+<%- include('partials/header', { pageTitle: 'All Orders', user }) %>
+
+<div class="container py-5">
+  <h2 class="mb-4">All Orders</h2>
+
+  <form class="row g-2 mb-3" method="GET" action="/admin/orders">
+    <div class="col-sm-6 col-md-4">
+      <input type="text" name="q" class="form-control" placeholder="Filter by username or email" value="<%= search || '' %>">
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-outline-primary">Filter</button>
+    </div>
+    <% if (search) { %>
+      <div class="col-auto">
+        <a href="/admin/orders" class="btn btn-link">Clear</a>
+      </div>
+    <% } %>
+  </form>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger rounded-3">
+      <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success rounded-3">
+      <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
+
+  <% if (!orders.length) { %>
+    <p>No orders yet.</p>
+  <% } else { %>
+    <div class="row g-3">
+      <% orders.forEach(function(order) { %>
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                <div>
+                  <div class="fw-bold">Order #<%= order.id %></div>
+                  <small class="text-muted">
+                    Placed: <%= new Date(order.created_at).toLocaleString() %> -
+                    User: <%= order.username %> (<%= order.email %>)
+                  </small>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold fs-5">$<%= Number(order.total_amount).toFixed(2) %></div>
+                  <small class="text-capitalize text-muted"><%= order.payment_method %></small>
+                  <div class="mt-2">
+                    <a href="/admin/orders/<%= order.id %>/invoice" class="btn btn-sm btn-outline-secondary">Invoice</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Image</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% const items = orderItems[order.id] || []; %>
+                    <% items.forEach(function(item) { 
+                        const displayName = item.productName || item.product_name_snapshot || 'Product';
+                        const image = item.image || item.product_image_snapshot;
+                    %>
+                      <tr>
+                        <td><%= displayName %></td>
+                        <td>
+                          <% if (image) { %>
+                            <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="60" class="img-thumbnail">
+                          <% } else { %>
+                            <span class="text-muted">No image</span>
+                          <% } %>
+                        </td>
+                        <td><%= item.quantity %></td>
+                        <td>$<%= Number(item.price_at_purchase).toFixed(2) %></td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              </div>
+
+              <form action="/admin/orders/<%= order.id %>/status" method="POST" class="d-flex align-items-center gap-2 mt-3">
+                <label for="status_<%= order.id %>" class="form-label mb-0">Status</label>
+                <select name="status" id="status_<%= order.id %>" class="form-select w-auto">
+                  <% statuses.forEach(function(status) { %>
+                    <option value="<%= status %>" <%= order.status === status ? 'selected' : '' %>><%= status %></option>
+                  <% }); %>
+                </select>
+                <button type="submit" class="btn btn-outline-primary btn-sm">Update</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      <% }); %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

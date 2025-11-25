@@ -47,12 +47,18 @@
             <li class="nav-item">
               <a class="nav-link" href="/admin/users">Manage Users</a>
             </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/admin/orders">Orders</a>
+            </li>
           <% } else if (resolvedUser && resolvedUser.role === 'user') { %>
             <li class="nav-item">
               <a class="nav-link" href="/shopping">Shop All</a>
             </li>
             <li class="nav-item">
               <a class="nav-link" href="/cart">Cart</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/orders">Orders</a>
             </li>
             <li class="nav-item">
               <a class="nav-link" href="/profile">Profile</a>

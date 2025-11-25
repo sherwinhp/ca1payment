@@ -1,4 +1,6 @@
 const createAdminController = ({ connection, primaryAdminEmail }) => {
+    const ORDER_STATUSES = ['pending', 'delivery', 'delivered', 'cancelled', 'placed'];
+
     const renderUserManagement = (req, res) => {
         const listUsersSQL = 'SELECT id, username, email, role FROM users ORDER BY role DESC, username ASC';
 
@@ -19,6 +21,114 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                 }
             });
         });
+    };
+
+    const renderAllOrders = (req, res) => {
+        const search = (req.query.q || '').trim();
+        const params = [];
+        let ordersSQL = `
+            SELECT o.id, o.user_id, o.total_amount, o.payment_method, o.status, o.created_at,
+                   u.username, u.email, u.role
+            FROM orders o
+            INNER JOIN users u ON u.id = o.user_id
+        `;
+
+        if (search) {
+            ordersSQL += ' WHERE u.username LIKE ? OR u.email LIKE ?';
+            params.push(`%${search}%`, `%${search}%`);
+        }
+
+        ordersSQL += ' ORDER BY o.created_at DESC';
+
+        connection.query(ordersSQL, params, (ordersErr, orders = []) => {
+            if (ordersErr) {
+                console.error('Unable to load all orders:', ordersErr);
+                req.flash('error', 'Unable to load orders right now.');
+                return res.render('adminOrders', {
+                    user: req.session.user,
+                    orders: [],
+                    orderItems: {},
+                    statuses: ORDER_STATUSES,
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            }
+
+            if (!orders.length) {
+                return res.render('adminOrders', {
+                    user: req.session.user,
+                    orders: [],
+                    orderItems: {},
+                    statuses: ORDER_STATUSES,
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            }
+
+            const orderIds = orders.map((o) => o.id);
+            const itemsSQL = `
+                SELECT
+                    oi.order_id,
+                    oi.product_id,
+                    oi.quantity,
+                    oi.price_at_purchase,
+                    oi.product_name_snapshot,
+                    oi.product_image_snapshot,
+                    p.productName,
+                    p.image
+                FROM order_items oi
+                LEFT JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id IN (?)
+                ORDER BY oi.id ASC
+            `;
+
+            connection.query(itemsSQL, [orderIds], (itemsErr, items = []) => {
+                if (itemsErr) {
+                    console.error('Unable to load order items:', itemsErr);
+                    req.flash('error', 'Unable to load order items right now.');
+                }
+
+                const grouped = items.reduce((acc, item) => {
+                    if (!acc[item.order_id]) acc[item.order_id] = [];
+                    acc[item.order_id].push(item);
+                    return acc;
+                }, {});
+
+                res.render('adminOrders', {
+                    user: req.session.user,
+                    orders,
+                    orderItems: grouped,
+                    statuses: ORDER_STATUSES,
+                    search,
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            });
+        });
+    };
+
+    const updateOrderStatus = (req, res) => {
+        const orderId = parseInt(req.params.id, 10);
+        const status = req.body.status;
+
+        if (!ORDER_STATUSES.includes(status)) {
+            req.flash('error', 'Invalid status selected.');
+            return res.redirect('/admin/orders');
+        }
+
+        connection.query(
+            'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [status, orderId],
+            (error, result) => {
+                if (error) {
+                    console.error('Unable to update order status:', error);
+                    req.flash('error', 'Unable to update order status right now.');
+                } else if (!result.affectedRows) {
+                    req.flash('error', 'Order not found.');
+                } else {
+                    req.flash('success', `Order #${orderId} marked as ${status}.`);
+                }
+
+                res.redirect('/admin/orders');
+            }
+        );
     };
 
     const promoteUser = (req, res) => {
@@ -43,6 +153,39 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                 req.flash('error', 'User not found or already an admin.');
             } else {
                 req.flash('success', 'User has been promoted to admin.');
+            }
+
+            res.redirect('/admin/users');
+        });
+    };
+
+    const demoteUser = (req, res) => {
+        const targetUserId = parseInt(req.params.id, 10);
+
+        if (!Number.isInteger(targetUserId)) {
+            req.flash('error', 'Invalid user selected.');
+            return res.redirect('/admin/users');
+        }
+
+        if (targetUserId === req.session.user.id) {
+            req.flash('error', 'You cannot change your own role here.');
+            return res.redirect('/admin/users');
+        }
+
+        const demoteSQL = `
+            UPDATE users
+            SET role = 'user'
+            WHERE id = ? AND email <> ? AND role = 'admin'
+        `;
+
+        connection.query(demoteSQL, [targetUserId, primaryAdminEmail], (error, result) => {
+            if (error) {
+                console.error('Unable to demote user:', error);
+                req.flash('error', 'Unable to demote user right now.');
+            } else if (!result.affectedRows) {
+                req.flash('error', 'User not found or cannot be demoted.');
+            } else {
+                req.flash('success', 'Admin has been demoted to user.');
             }
 
             res.redirect('/admin/users');
@@ -130,11 +273,64 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         });
     };
 
+    const renderInvoice = (req, res) => {
+        const orderId = parseInt(req.params.id, 10);
+        const orderSQL = `
+            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at,
+                   u.username, u.email, u.address, u.contact
+            FROM orders o
+            INNER JOIN users u ON u.id = o.user_id
+            WHERE o.id = ?
+        `;
+
+        connection.query(orderSQL, [orderId], (orderErr, orders = []) => {
+            if (orderErr || !orders.length) {
+                req.flash('error', 'Order not found.');
+                return res.redirect('/admin/orders');
+            }
+
+            const order = orders[0];
+            const itemsSQL = `
+                SELECT
+                    oi.product_id,
+                    oi.quantity,
+                    oi.price_at_purchase,
+                    oi.product_name_snapshot,
+                    oi.product_image_snapshot,
+                    p.productName,
+                    p.image
+                FROM order_items oi
+                LEFT JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id = ?
+                ORDER BY oi.id ASC
+            `;
+
+            connection.query(itemsSQL, [orderId], (itemsErr, items = []) => {
+                if (itemsErr) {
+                    console.error('Unable to load invoice items for admin:', itemsErr);
+                    req.flash('error', 'Unable to load invoice right now.');
+                    return res.redirect('/admin/orders');
+                }
+
+                res.render('orderInvoice', {
+                    user: req.session.user,
+                    order,
+                    items,
+                    isAdminView: true
+                });
+            });
+        });
+    };
+
     return {
         renderUserManagement,
+        renderAllOrders,
+        updateOrderStatus,
         promoteUser,
+        demoteUser,
         createUser,
-        deleteUser
+        deleteUser,
+        renderInvoice
     };
 };
 

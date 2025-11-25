@@ -2,7 +2,14 @@ const createProductController = ({ connection, decorateProduct }) => {
     const renderInventory = (req, res) => {
         connection.query('SELECT * FROM products', (error, results) => {
             if (error) throw error;
-            res.render('inventory', { products: results, user: req.session.user });
+            res.render('inventory', {
+                products: results,
+                user: req.session.user,
+                messages: {
+                    success: req.flash('success'),
+                    error: req.flash('error')
+                }
+            });
         });
     };
 
@@ -32,7 +39,7 @@ const createProductController = ({ connection, decorateProduct }) => {
                 status: productResults[0].status || (productResults[0].quantity > 0 ? 'in_stock' : 'sold_out')
             });
             const reviewsSQL = `
-                SELECT r.id, r.rating, r.review, r.created_at, r.updated_at, r.user_id, u.username, u.role
+                SELECT r.id, r.rating, r.review, r.created_at, r.updated_at, r.user_id, r.admin_reply, u.username, u.role
                 FROM product_reviews r
                 INNER JOIN users u ON u.id = r.user_id
                 WHERE r.product_id = ?
@@ -74,24 +81,39 @@ const createProductController = ({ connection, decorateProduct }) => {
     };
 
     const renderAddProductForm = (req, res) => {
-        res.render('addProduct', { user: req.session.user });
+        res.render('addProduct', {
+            user: req.session.user,
+            messages: {
+                success: req.flash('success'),
+                error: req.flash('error')
+            }
+        });
     };
 
     const createProduct = (req, res) => {
-        const { name, quantity, price, status } = req.body;
+        const { name, quantity, price } = req.body;
         let image = null;
-        const normalizedStatus = status === 'sold_out' ? 'sold_out' : 'in_stock';
+        const qty = Math.max(0, parseInt(quantity, 10) || 0);
+        const priceValue = Number(price);
+        const normalizedStatus = qty <= 0 ? 'sold_out' : 'in_stock';
+
+        if (priceValue <= 0) {
+            req.flash('error', 'Price must be greater than zero.');
+            return res.redirect('/addProduct');
+        }
 
         if (req.file) {
             image = req.file.filename;
         }
 
         const sql = 'INSERT INTO products (productName, quantity, price, image, status) VALUES (?, ?, ?, ?, ?)';
-        connection.query(sql, [name, quantity, price, image, normalizedStatus], (error) => {
+        connection.query(sql, [name, qty, priceValue, image, normalizedStatus], (error) => {
             if (error) {
                 console.error('Error adding product:', error);
-                res.status(500).send('Error adding product');
+                req.flash('error', 'Error adding product.');
+                res.redirect('/addProduct');
             } else {
+                req.flash('success', 'Product added.');
                 res.redirect('/inventory');
             }
         });
@@ -105,7 +127,14 @@ const createProductController = ({ connection, decorateProduct }) => {
             if (error) throw error;
 
             if (results.length > 0) {
-                res.render('updateProduct', { product: results[0], user: req.session.user });
+                res.render('updateProduct', {
+                    product: results[0],
+                    user: req.session.user,
+                    messages: {
+                        success: req.flash('success'),
+                        error: req.flash('error')
+                    }
+                });
             } else {
                 res.status(404).send('Product not found');
             }
@@ -114,20 +143,29 @@ const createProductController = ({ connection, decorateProduct }) => {
 
     const updateProduct = (req, res) => {
         const productId = req.params.id;
-        const { name, quantity, price, status } = req.body;
+        const { name, quantity, price } = req.body;
         let image = req.body.currentImage;
-        const normalizedStatus = status === 'sold_out' ? 'sold_out' : 'in_stock';
+        const qty = Math.max(0, parseInt(quantity, 10) || 0);
+        const priceValue = Number(price);
+        const normalizedStatus = qty <= 0 ? 'sold_out' : 'in_stock';
+
+        if (priceValue <= 0) {
+            req.flash('error', 'Price must be greater than zero.');
+            return res.redirect(`/updateProduct/${productId}`);
+        }
 
         if (req.file) {
             image = req.file.filename;
         }
 
         const sql = 'UPDATE products SET productName = ?, quantity = ?, price = ?, image = ?, status = ? WHERE id = ?';
-        connection.query(sql, [name, quantity, price, image, normalizedStatus, productId], (error) => {
+        connection.query(sql, [name, qty, priceValue, image, normalizedStatus, productId], (error) => {
             if (error) {
                 console.error('Error updating product:', error);
-                res.status(500).send('Error updating product');
+                req.flash('error', 'Error updating product.');
+                res.redirect(`/updateProduct/${productId}`);
             } else {
+                req.flash('success', 'Product updated.');
                 res.redirect('/inventory');
             }
         });
@@ -136,14 +174,26 @@ const createProductController = ({ connection, decorateProduct }) => {
     const deleteProduct = (req, res) => {
         const productId = req.params.id;
 
-        connection.query('DELETE FROM products WHERE id = ?', [productId], (error) => {
-            if (error) {
-                console.error('Error deleting product:', error);
-                res.status(500).send('Error deleting product');
-            } else {
+        // Soft-delete to preserve order history: mark sold out and zero stock
+        connection.query(
+            `
+                UPDATE products
+                SET quantity = 0, status = 'sold_out'
+                WHERE id = ?
+            `,
+            [productId],
+            (error, result) => {
+                if (error) {
+                    console.error('Error deleting product:', error);
+                    req.flash('error', 'Error deleting product.');
+                } else if (!result.affectedRows) {
+                    req.flash('error', 'Product not found.');
+                } else {
+                    req.flash('success', 'Product archived (sold out) to preserve order history.');
+                }
                 res.redirect('/inventory');
             }
-        });
+        );
     };
 
     return {

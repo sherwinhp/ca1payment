@@ -5,6 +5,16 @@
   <div class="text-center">
     <h2>Products from Supermarket App Database</h2>
   </div>
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger">
+      <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success">
+      <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
   <table class="table table-hover small text-center mt-4">
     <thead>
       <tr>
@@ -24,7 +34,7 @@
           <td><img src="/images/<%= product.image %>" width="20%" alt="<%= product.productName %>"></td>
           <td><%= product.quantity %></td>
           <td>$<%= Number(product.price).toFixed(2) %></td>
-          <% const status = product.status || (Number(product.quantity) > 0 ? 'in_stock' : 'sold_out'); %>
+          <% const status = Number(product.quantity) <= 0 ? 'sold_out' : (product.status === 'sold_out' ? 'sold_out' : 'in_stock'); %>
           <td>
             <% if (status === 'sold_out') { %>
               <span class="badge bg-danger">Sold out</span>

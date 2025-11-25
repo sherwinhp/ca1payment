@@ -98,7 +98,13 @@
               <% if (isPrimary) { %>
                 <span class="text-muted small">This admin cannot be modified.</span>
               <% } else if (account.role === 'admin') { %>
-                <span class="text-muted small">Already an admin</span>
+                <% if (isSelf) { %>
+                  <span class="text-muted small">Signed-in admin</span>
+                <% } else { %>
+                  <form action="/admin/users/<%= account.id %>/demote" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">Demote to user</button>
+                  </form>
+                <% } %>
               <% } else { %>
                 <form action="/admin/users/<%= account.id %>/promote" method="POST" class="d-inline">
                   <button type="submit" class="btn btn-sm btn-outline-primary">Promote to admin</button>

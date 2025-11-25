@@ -1,0 +1,21 @@
+<%- include('partials/header', { pageTitle: 'Order Successful', user }) %>
+
+<div class="container py-5 text-center">
+  <div class="card shadow-sm mx-auto" style="max-width: 540px;">
+    <div class="card-body">
+      <div class="display-6 mb-3">Success</div>
+      <h3 class="card-title mb-3">Order placed successfully</h3>
+      <p class="mb-2">Order ID: <strong>#<%= order.id %></strong></p>
+      <p class="mb-2">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></p>
+      <p class="mb-2">Payment method: <strong class="text-capitalize"><%= order.payment_method %></strong></p>
+      <p class="mb-4">Total paid: <strong>$<%= Number(order.total_amount).toFixed(2) %></strong></p>
+      <div class="d-grid gap-2">
+        <a href="/orders" class="btn btn-primary">View order history</a>
+        <a href="/orders/<%= order.id %>/invoice" class="btn btn-outline-secondary">View / print invoice</a>
+        <a href="/shopping" class="btn btn-outline-dark">Continue shopping</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

@@ -39,7 +39,54 @@ const createReviewController = ({ connection }) => {
         });
     };
 
-    return { submitProductReview };
+    const deleteReview = (req, res) => {
+        const reviewId = parseInt(req.params.id, 10);
+        const sessionUser = req.session.user;
+
+        if (!sessionUser || sessionUser.role !== 'admin') {
+            req.flash('error', 'Only admins can delete reviews.');
+            return res.redirect('back');
+        }
+
+        connection.query('DELETE FROM product_reviews WHERE id = ?', [reviewId], (error) => {
+            if (error) {
+                console.error('Unable to delete review:', error);
+                req.flash('error', 'Unable to delete review right now.');
+            } else {
+                req.flash('success', 'Review deleted.');
+            }
+            res.redirect('back');
+        });
+    };
+
+    const replyToReview = (req, res) => {
+        const reviewId = parseInt(req.params.id, 10);
+        const reply = (req.body.reply || '').trim();
+        const sessionUser = req.session.user;
+
+        if (!sessionUser || sessionUser.role !== 'admin') {
+            req.flash('error', 'Only admins can reply to reviews.');
+            return res.redirect('back');
+        }
+
+        connection.query(
+            'UPDATE product_reviews SET admin_reply = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [reply, reviewId],
+            (error, result) => {
+                if (error) {
+                    console.error('Unable to save reply:', error);
+                    req.flash('error', 'Unable to save reply right now.');
+                } else if (!result.affectedRows) {
+                    req.flash('error', 'Review not found.');
+                } else {
+                    req.flash('success', 'Reply saved.');
+                }
+                res.redirect('back');
+            }
+        );
+    };
+
+    return { submitProductReview, deleteReview, replyToReview };
 };
 
 module.exports = createReviewController;
