@@ -4,6 +4,7 @@ const createShoppingController = ({ connection, decorateProduct }) => {
             SELECT p.*, COALESCE(AVG(r.rating), 0) AS averageRating, COUNT(r.id) AS reviewCount
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
+            WHERE p.status = 'in_stock' AND p.quantity > 0
             GROUP BY p.id
             ORDER BY averageRating DESC, reviewCount DESC, p.productName ASC
         `;
