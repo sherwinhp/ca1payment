@@ -1,4 +1,8 @@
-const createReviewController = ({ connection }) => {
+const createReviewModel = require('../models/reviewModel');
+
+const createReviewController = ({ connection, models = {} }) => {
+    const reviewModel = models.reviewModel || createReviewModel(connection);
+
     const submitProductReview = (req, res) => {
         const productId = parseInt(req.params.id, 10);
         const { rating, reviewText } = req.body;
@@ -21,13 +25,10 @@ const createReviewController = ({ connection }) => {
         }
 
         const sanitizedReview = reviewText ? reviewText.trim() : '';
-        const upsertSQL = `
-            INSERT INTO product_reviews (product_id, user_id, rating, review)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE rating = VALUES(rating), review = VALUES(review), updated_at = CURRENT_TIMESTAMP
-        `;
 
-        connection.query(upsertSQL, [productId, sessionUser.id, numericRating, sanitizedReview], (error) => {
+        reviewModel.upsertReview(
+            { productId, userId: sessionUser.id, rating: numericRating, review: sanitizedReview },
+            (error) => {
             if (error) {
                 console.error('Unable to save review:', error);
                 req.flash('error', 'We could not save your review right now. Please try again later.');
@@ -36,7 +37,8 @@ const createReviewController = ({ connection }) => {
             }
 
             res.redirect(`/product/${productId}#reviews`);
-        });
+            }
+        );
     };
 
     const deleteReview = (req, res) => {
@@ -48,7 +50,7 @@ const createReviewController = ({ connection }) => {
             return res.redirect('back');
         }
 
-        connection.query('DELETE FROM product_reviews WHERE id = ?', [reviewId], (error) => {
+        reviewModel.deleteReview(reviewId, (error) => {
             if (error) {
                 console.error('Unable to delete review:', error);
                 req.flash('error', 'Unable to delete review right now.');
@@ -69,21 +71,17 @@ const createReviewController = ({ connection }) => {
             return res.redirect('back');
         }
 
-        connection.query(
-            'UPDATE product_reviews SET admin_reply = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [reply, reviewId],
-            (error, result) => {
-                if (error) {
-                    console.error('Unable to save reply:', error);
-                    req.flash('error', 'Unable to save reply right now.');
-                } else if (!result.affectedRows) {
-                    req.flash('error', 'Review not found.');
-                } else {
-                    req.flash('success', 'Reply saved.');
-                }
-                res.redirect('back');
+        reviewModel.replyToReview({ reviewId, reply }, (error, result) => {
+            if (error) {
+                console.error('Unable to save reply:', error);
+                req.flash('error', 'Unable to save reply right now.');
+            } else if (!result.affectedRows) {
+                req.flash('error', 'Review not found.');
+            } else {
+                req.flash('success', 'Reply saved.');
             }
-        );
+            res.redirect('back');
+        });
     };
 
     return { submitProductReview, deleteReview, replyToReview };

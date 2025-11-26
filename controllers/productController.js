@@ -1,6 +1,12 @@
-const createProductController = ({ connection, decorateProduct }) => {
+const createProductModel = require('../models/productModel');
+const createReviewModel = require('../models/reviewModel');
+
+const createProductController = ({ connection, decorateProduct, models = {} }) => {
+    const productModel = models.productModel || createProductModel(connection);
+    const reviewModel = models.reviewModel || createReviewModel(connection);
+
     const renderInventory = (req, res) => {
-        connection.query('SELECT * FROM products', (error, results) => {
+        productModel.getAll((error, results) => {
             if (error) throw error;
             res.render('inventory', {
                 products: results,
@@ -16,15 +22,8 @@ const createProductController = ({ connection, decorateProduct }) => {
     const renderProductDetails = (req, res) => {
         const currentUser = req.session.user || null;
         const productId = parseInt(req.params.id, 10);
-        const singleProductSQL = `
-            SELECT p.*, COALESCE(AVG(r.rating), 0) AS averageRating, COUNT(r.id) AS reviewCount
-            FROM products p
-            LEFT JOIN product_reviews r ON r.product_id = p.id
-            WHERE p.id = ?
-            GROUP BY p.id
-        `;
 
-        connection.query(singleProductSQL, [productId], (error, productResults) => {
+        productModel.getWithStats(productId, (error, productResults) => {
             if (error) {
                 console.error('Unable to fetch product details:', error);
                 return res.status(500).send('Unable to load product right now.');
@@ -38,15 +37,7 @@ const createProductController = ({ connection, decorateProduct }) => {
                 ...productResults[0],
                 status: productResults[0].status || (productResults[0].quantity > 0 ? 'in_stock' : 'sold_out')
             });
-            const reviewsSQL = `
-                SELECT r.id, r.rating, r.review, r.created_at, r.updated_at, r.user_id, r.admin_reply, u.username, u.role
-                FROM product_reviews r
-                INNER JOIN users u ON u.id = r.user_id
-                WHERE r.product_id = ?
-                ORDER BY r.updated_at DESC
-            `;
-
-            connection.query(reviewsSQL, [productId], (reviewErr, reviewResults) => {
+            reviewModel.getByProduct(productId, (reviewErr, reviewResults) => {
                 if (reviewErr) {
                     console.error('Unable to fetch reviews:', reviewErr);
                     return res.status(500).send('Unable to load product reviews right now.');
@@ -106,11 +97,12 @@ const createProductController = ({ connection, decorateProduct }) => {
             image = req.file.filename;
         }
 
-        const sql = 'INSERT INTO products (productName, quantity, price, image, status) VALUES (?, ?, ?, ?, ?)';
-        connection.query(sql, [name, qty, priceValue, image, normalizedStatus], (error) => {
-            if (error) {
-                console.error('Error adding product:', error);
-                req.flash('error', 'Error adding product.');
+        productModel.create(
+            { name, quantity: qty, price: priceValue, image, status: normalizedStatus },
+            (error) => {
+                if (error) {
+                    console.error('Error adding product:', error);
+                    req.flash('error', 'Error adding product.');
                 res.redirect('/addProduct');
             } else {
                 req.flash('success', 'Product added.');
@@ -121,9 +113,8 @@ const createProductController = ({ connection, decorateProduct }) => {
 
     const renderUpdateProductForm = (req, res) => {
         const productId = req.params.id;
-        const sql = 'SELECT * FROM products WHERE id = ?';
 
-        connection.query(sql, [productId], (error, results) => {
+        productModel.getById(productId, (error, results) => {
             if (error) throw error;
 
             if (results.length > 0) {
@@ -158,11 +149,12 @@ const createProductController = ({ connection, decorateProduct }) => {
             image = req.file.filename;
         }
 
-        const sql = 'UPDATE products SET productName = ?, quantity = ?, price = ?, image = ?, status = ? WHERE id = ?';
-        connection.query(sql, [name, qty, priceValue, image, normalizedStatus, productId], (error) => {
-            if (error) {
-                console.error('Error updating product:', error);
-                req.flash('error', 'Error updating product.');
+        productModel.update(
+            { id: productId, name, quantity: qty, price: priceValue, image, status: normalizedStatus },
+            (error) => {
+                if (error) {
+                    console.error('Error updating product:', error);
+                    req.flash('error', 'Error updating product.');
                 res.redirect(`/updateProduct/${productId}`);
             } else {
                 req.flash('success', 'Product updated.');
@@ -175,25 +167,17 @@ const createProductController = ({ connection, decorateProduct }) => {
         const productId = req.params.id;
 
         // Soft-delete to preserve order history: mark sold out and zero stock
-        connection.query(
-            `
-                UPDATE products
-                SET quantity = 0, status = 'sold_out'
-                WHERE id = ?
-            `,
-            [productId],
-            (error, result) => {
-                if (error) {
-                    console.error('Error deleting product:', error);
-                    req.flash('error', 'Error deleting product.');
-                } else if (!result.affectedRows) {
-                    req.flash('error', 'Product not found.');
-                } else {
-                    req.flash('success', 'Product archived (sold out) to preserve order history.');
-                }
-                res.redirect('/inventory');
+        productModel.softDelete(productId, (error, result) => {
+            if (error) {
+                console.error('Error deleting product:', error);
+                req.flash('error', 'Error deleting product.');
+            } else if (!result.affectedRows) {
+                req.flash('error', 'Product not found.');
+            } else {
+                req.flash('success', 'Product archived (sold out) to preserve order history.');
             }
-        );
+            res.redirect('/inventory');
+        });
     };
 
     return {

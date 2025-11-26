@@ -10,6 +10,7 @@ const createCartController = require('./controllers/cartController');
 const createProductController = require('./controllers/productController');
 const createReviewController = require('./controllers/reviewController');
 const createAdminController = require('./controllers/adminController');
+const createModels = require('./models/Supermarket');
 const app = express();
 
 const PRIMARY_ADMIN_EMAIL = '24046565@myrp.edu.sg';
@@ -139,6 +140,8 @@ const connection = mysql.createConnection({
     password: 'Republic_C207',
     database: 'c372_supermarketdb'
 });
+
+const models = createModels(connection);
 
 const ensureReviewInfrastructure = () => {
     const createReviewTableSQL = `
@@ -460,10 +463,11 @@ const cartController = createCartController({ connection });
 
 const productController = createProductController({
     connection,
-    decorateProduct
+    decorateProduct,
+    models
 });
 
-const reviewController = createReviewController({ connection });
+const reviewController = createReviewController({ connection, models });
 
 const adminController = createAdminController({
     connection,
