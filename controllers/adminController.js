@@ -1,8 +1,13 @@
 const createAdminController = ({ connection, primaryAdminEmail }) => {
-    const ORDER_STATUSES = ['pending', 'delivery', 'delivered', 'cancelled', 'placed'];
+    const ORDER_STATUSES = ['pending', 'delivering', 'delivered', 'cancelled'];
 
     const renderUserManagement = (req, res) => {
-        const listUsersSQL = 'SELECT id, username, email, role FROM users ORDER BY role DESC, username ASC';
+        const listUsersSQL = `
+            SELECT id, username, email, role
+            FROM users
+            WHERE role <> 'deleted'
+            ORDER BY role DESC, username ASC
+        `;
 
         connection.query(listUsersSQL, (error, results = []) => {
             if (error) {
@@ -258,19 +263,38 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
             return res.redirect('/admin/users');
         }
 
-        const deleteSQL = 'DELETE FROM users WHERE id = ? AND email <> ?';
-        connection.query(deleteSQL, [targetUserId, primaryAdminEmail], (error, result) => {
+        const tombstoneEmail = `deleted_${targetUserId}_${Date.now()}@deleted.local`;
+        const tombstonePassword = `deleted_${targetUserId}_${Date.now()}`;
+        const tombstoneAddress = 'Removed';
+        const tombstoneContact = '00000000';
+        const anonymizeSQL = `
+            UPDATE users
+            SET
+                username = 'Deleted user',
+                email = ?,
+                password = SHA1(?),
+                address = ?,
+                contact = ?,
+                role = 'deleted'
+            WHERE id = ? AND email <> ?
+        `;
+
+        connection.query(
+            anonymizeSQL,
+            [tombstoneEmail, tombstonePassword, tombstoneAddress, tombstoneContact, targetUserId, primaryAdminEmail],
+            (error, result) => {
             if (error) {
                 console.error('Unable to delete user:', error);
                 req.flash('error', 'Unable to delete user right now.');
             } else if (!result.affectedRows) {
                 req.flash('error', 'User not found or cannot be deleted.');
             } else {
-                req.flash('success', 'User account deleted.');
+                req.flash('success', 'User account deleted (order history retained).');
             }
 
             res.redirect('/admin/users');
-        });
+        }
+        );
     };
 
     const renderInvoice = (req, res) => {

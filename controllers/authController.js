@@ -47,15 +47,15 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
     };
 
     const handleLogin = (req, res) => {
-        const { email, password } = req.body;
+        const { identifier, password } = req.body;
 
-        if (!email || !password) {
-            req.flash('error', 'All fields are required.');
+        if (!identifier || !password) {
+            req.flash('error', 'Email/username and password are required.');
             return res.redirect('/login');
         }
 
-        const sql = 'SELECT * FROM users WHERE email = ? AND password = SHA1(?)';
-        connection.query(sql, [email, password], (err, results) => {
+        const sql = 'SELECT * FROM users WHERE (email = ? OR username = ?) AND password = SHA1(?)';
+        connection.query(sql, [identifier, identifier, password], (err, results) => {
             if (err) throw err;
 
             if (results.length > 0) {
@@ -69,7 +69,7 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
                     res.redirect('/inventory');
                 }
             } else {
-                req.flash('error', 'Invalid email or password.');
+                req.flash('error', 'Invalid email/username or password.');
                 res.redirect('/login');
             }
         });
@@ -80,134 +80,12 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
         res.redirect('/');
     };
 
-    const renderProfile = (req, res) => {
-        const currentUserId = req.session.user.id;
-        const fetchSQL = 'SELECT id, username, email, address, contact, role FROM users WHERE id = ?';
-
-        connection.query(fetchSQL, [currentUserId], (error, results = []) => {
-            if (error || !results.length) {
-                console.error('Unable to load profile:', error);
-                req.flash('error', 'We could not load your profile right now.');
-            }
-
-            const resolvedUser = markPrimaryAdmin(results[0] || req.session.user);
-            const formData = req.flash('formData')[0] || resolvedUser;
-            res.render('profile', {
-                user: resolvedUser,
-                formData,
-                messages: {
-                    errors: req.flash('error'),
-                    success: req.flash('success')
-                }
-            });
-        });
-    };
-
-    const updateProfile = (req, res) => {
-        const { username, email, address, contact, password, oldPassword } = req.body;
-        const userId = req.session.user.id;
-        const errors = [];
-
-        if (!username || !email || !address || !contact) {
-            errors.push('All profile fields are required.');
-        }
-
-        if (password && password.length > 0 && password.length < 6) {
-            errors.push('If provided, your new password must be at least 6 characters long.');
-        }
-
-        if (errors.length) {
-            errors.forEach((message) => req.flash('error', message));
-            req.flash('formData', { username, email, address, contact });
-            return res.redirect('/profile');
-        }
-
-        const emailCheckSQL = 'SELECT id FROM users WHERE email = ? AND id <> ?';
-        connection.query(emailCheckSQL, [email, userId], (emailErr, existingUsers = []) => {
-            if (emailErr) {
-                console.error('Unable to validate email uniqueness:', emailErr);
-                req.flash('error', 'Unable to update profile right now. Please try again later.');
-                req.flash('formData', { username, email, address, contact });
-                return res.redirect('/profile');
-            }
-
-            if (existingUsers.length) {
-                req.flash('error', 'That email is already in use. Please choose another.');
-                req.flash('formData', { username, email, address, contact });
-                return res.redirect('/profile');
-            }
-
-            const updateFields = ['username = ?', 'email = ?', 'address = ?', 'contact = ?'];
-            const params = [username, email, address, contact];
-
-            const finalizeUpdate = () => {
-                const updateSQL = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-                params.push(userId);
-                connection.query(updateSQL, params, (updateErr) => {
-                    if (updateErr) {
-                        console.error('Unable to update profile:', updateErr);
-                        req.flash('error', 'We could not save your changes. Please try again.');
-                        req.flash('formData', { username, email, address, contact });
-                        return res.redirect('/profile');
-                    }
-
-                    const updatedUser = markPrimaryAdmin({
-                        ...req.session.user,
-                        username,
-                        email,
-                        address,
-                        contact
-                    });
-
-                    req.session.user = updatedUser;
-                    req.flash('success', 'Profile updated successfully.');
-                    res.redirect('/profile');
-                });
-            };
-
-            if (password && password.length >= 6) {
-                if (!oldPassword) {
-                    req.flash('error', 'Please provide your current password to change it.');
-                    req.flash('formData', { username, email, address, contact });
-                    return res.redirect('/profile');
-                }
-
-                const passwordCheckSQL = 'SELECT password FROM users WHERE id = ?';
-                connection.query(passwordCheckSQL, [userId], (pwErr, pwRows = []) => {
-                    if (pwErr || !pwRows.length) {
-                        console.error('Unable to validate current password:', pwErr);
-                        req.flash('error', 'Unable to update profile right now.');
-                        req.flash('formData', { username, email, address, contact });
-                        return res.redirect('/profile');
-                    }
-
-                    const isMatchSQL = 'SELECT 1 FROM users WHERE id = ? AND password = SHA1(?)';
-                    connection.query(isMatchSQL, [userId, oldPassword], (matchErr, matches = []) => {
-                        if (matchErr || !matches.length) {
-                            req.flash('error', 'Current password is incorrect.');
-                            req.flash('formData', { username, email, address, contact });
-                            return res.redirect('/profile');
-                        }
-
-                        updateFields.push('password = SHA1(?)');
-                        params.push(password);
-                        finalizeUpdate();
-                    });
-                });
-            } else {
-                finalizeUpdate();
-            }
-        });
-    };
-
     return {
         renderRegister,
         handleRegistration,
         renderLogin,
         handleLogin,
-        logout,
-        renderProfile,
-        updateProfile
+        logout
     };
 };
 

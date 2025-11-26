@@ -116,6 +116,7 @@
                                         <option value="<%= q %>"><%= q %> pack<%= q === 1 ? '' : 's' %></option>
                                     <% } %>
                                 </select>
+                                <small class="text-muted">Max available: <%= maxQty %></small>
                             </div>
                             <div class="align-self-end flex-grow-1">
                                 <button type="submit" class="btn btn-primary w-100">Add to cart</button>
@@ -228,9 +229,11 @@
                             <% if (isAdmin) { %>
                                 <div class="d-flex gap-2 mt-3">
                                     <form action="/admin/reviews/<%= review.id %>/delete" method="POST" onsubmit="return confirm('Delete this review?');">
+                                        <input type="hidden" name="productId" value="<%= product.id %>">
                                         <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                                     </form>
                                     <form action="/admin/reviews/<%= review.id %>/reply" method="POST" class="d-flex gap-2 w-100">
+                                        <input type="hidden" name="productId" value="<%= product.id %>">
                                         <input type="text" name="reply" class="form-control form-control-sm" placeholder="Reply as admin" value="<%= review.admin_reply || '' %>">
                                         <button type="submit" class="btn btn-sm btn-outline-primary">Reply</button>
                                     </form>

@@ -5,7 +5,7 @@ const createShoppingController = ({ connection, decorateProduct }) => {
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
             GROUP BY p.id
-            ORDER BY p.productName ASC
+            ORDER BY averageRating DESC, reviewCount DESC, p.productName ASC
         `;
 
         connection.query(shoppingSQL, (error, results) => {
