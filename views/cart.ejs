@@ -30,43 +30,65 @@
         </tr>
       </thead>
       <tbody>
-        <% let total = 0; %>
-        <% cart.forEach(function(item) { %>
+        <% let total = 0; let hasSoldOut = false; %>
+        <% cart.forEach(function(item) {
+             const stockCount = Number(item.stock) || 0;
+             const isSoldOut = stockCount <= 0 || item.status === 'sold_out';
+             if (isSoldOut) { hasSoldOut = true; }
+        %>
           <tr>
             <td><%= item.productName %></td>
             <td><img src="/images/<%= item.image %>" width="80" class="img-thumbnail" alt="<%= item.productName %>"></td>
             <td>
-              <form action="/cart/update/<%= item.productId %>" method="POST" class="d-flex gap-2 align-items-center">
-                <input
-                  type="number"
-                  name="quantity"
-                  min="1"
-                  max="<%= item.stock %>"
-                  value="<%= item.quantity %>"
-                  class="form-control form-control-sm"
-                  style="max-width: 90px;"
-                  required
-                >
-                <button type="submit" class="btn btn-primary btn-sm">Update</button>
-                <small class="text-muted">Stock: <%= item.stock %></small>
-              </form>
+              <% if (isSoldOut) { %>
+                <span class="badge bg-danger">Sold out</span>
+                <div class="text-muted small">Remove this item to continue.</div>
+              <% } else { %>
+                <form action="/cart/update/<%= item.productId %>" method="POST" class="d-flex gap-2 align-items-center">
+                  <input
+                    type="number"
+                    name="quantity"
+                    min="1"
+                    max="<%= stockCount %>"
+                    value="<%= item.quantity %>"
+                    class="form-control form-control-sm"
+                    style="max-width: 90px;"
+                    required
+                  >
+                  <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                  <small class="text-muted">Stock: <%= stockCount %></small>
+                </form>
+              <% } %>
             </td>
-            <td>$<%= (item.price * item.quantity).toFixed(2) %></td>
+            <td>
+              <% if (isSoldOut) { %>
+                <span class="text-muted">—</span>
+              <% } else { %>
+                $<%= (item.price * item.quantity).toFixed(2) %>
+              <% } %>
+            </td>
             <td>
               <form action="/cart/delete/<%= item.productId %>" method="POST" onsubmit="return confirm('Remove this item from your cart?');">
                 <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
               </form>
             </td>
           </tr>
-          <% total += item.price * item.quantity; %>
+          <% if (!isSoldOut) { total += item.price * item.quantity; } %>
         <% }); %>
       </tbody>
     </table>
+    <% if (hasSoldOut) { %>
+      <div class="alert alert-warning">Some items are sold out. Please remove them before checking out.</div>
+    <% } %>
     <h4>Total: $<%= total.toFixed(2) %></h4>
 
     <div class="mt-4">
       <a href="/shopping" class="btn btn-secondary">Back to Shopping</a>
-      <a href="/checkout" class="btn btn-primary ms-2">Proceed to Checkout</a>
+      <% if (hasSoldOut) { %>
+        <button class="btn btn-primary ms-2" disabled>Proceed to Checkout</button>
+      <% } else { %>
+        <a href="/checkout" class="btn btn-primary ms-2">Proceed to Checkout</a>
+      <% } %>
       <form action="/cart/clear" method="POST" class="d-inline ms-2" onsubmit="return confirm('Clear all items from your cart?');">
         <button type="submit" class="btn btn-outline-danger">Clear cart</button>
       </form>

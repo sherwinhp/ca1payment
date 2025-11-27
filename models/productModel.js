@@ -1,11 +1,21 @@
 const createProductModel = (connection) => {
     const getAll = (callback) => {
-        connection.query('SELECT * FROM products', callback);
+        const sql = `
+            SELECT
+                p.*,
+                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
+            FROM products p
+        `;
+        connection.query(sql, callback);
     };
 
     const getWithStats = (productId, callback) => {
         const sql = `
-            SELECT p.*, COALESCE(AVG(r.rating), 0) AS averageRating, COUNT(r.id) AS reviewCount
+            SELECT
+                p.*,
+                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status,
+                COALESCE(AVG(r.rating), 0) AS averageRating,
+                COUNT(r.id) AS reviewCount
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
             WHERE p.id = ?
@@ -26,7 +36,14 @@ const createProductModel = (connection) => {
     };
 
     const getById = (productId, callback) => {
-        connection.query('SELECT * FROM products WHERE id = ?', [productId], callback);
+        const sql = `
+            SELECT
+                p.*,
+                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
+            FROM products p
+            WHERE p.id = ?
+        `;
+        connection.query(sql, [productId], callback);
     };
 
     const create = ({ name, quantity, price, image, status }, callback) => {

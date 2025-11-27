@@ -12,7 +12,7 @@ const createCartController = ({ connection }) => {
             if (results.length > 0) {
                 const product = results[0];
                 const stockCount = Number(product.quantity) || 0;
-                const status = product.status || (stockCount > 0 ? 'in_stock' : 'sold_out');
+                const status = stockCount <= 0 ? 'sold_out' : 'in_stock';
                 const safeQuantity = Math.max(1, Math.min(quantity, stockCount || 1));
 
                 if (status === 'sold_out' || stockCount <= 0) {
@@ -83,7 +83,7 @@ const createCartController = ({ connection }) => {
 
             const product = results[0];
             const stockCount = Number(product.stock) || 0;
-            const status = product.status || (stockCount > 0 ? 'in_stock' : 'sold_out');
+            const status = stockCount <= 0 ? 'sold_out' : 'in_stock';
 
             if (status === 'sold_out' || stockCount <= 0) {
                 req.flash('error', 'This product is sold out and has been removed from your cart.');
@@ -142,7 +142,7 @@ const createCartController = ({ connection }) => {
                 p.price,
                 p.image,
                 p.quantity AS stock,
-                p.status,
+                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status,
                 ci.created_at
             FROM cart_items ci
             INNER JOIN products p ON p.id = ci.product_id
@@ -185,7 +185,7 @@ const createCartController = ({ connection }) => {
                 p.price,
                 p.image,
                 p.quantity AS stock,
-                p.status
+                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
             FROM cart_items ci
             INNER JOIN products p ON p.id = ci.product_id
             WHERE ci.user_id = ?
@@ -262,7 +262,7 @@ const createCartController = ({ connection }) => {
             let totalAmount = 0;
             for (const item of items) {
                 const stockCount = Number(item.stock) || 0;
-                const status = item.status || (stockCount > 0 ? 'in_stock' : 'sold_out');
+                const status = stockCount <= 0 ? 'sold_out' : 'in_stock';
                 if (status === 'sold_out' || stockCount <= 0) {
                     req.flash('error', `${item.productName} is sold out and was removed from your cart.`);
                     return res.redirect('/cart');
