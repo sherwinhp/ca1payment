@@ -8,6 +8,7 @@ const createShoppingController = ({ connection, decorateProduct }) => {
                 COUNT(r.id) AS reviewCount
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
+            WHERE p.is_deleted = 0
             GROUP BY p.id
             ORDER BY status ASC, averageRating DESC, reviewCount DESC, p.productName ASC
         `;

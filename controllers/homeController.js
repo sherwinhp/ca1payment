@@ -10,7 +10,7 @@ const createHomeController = ({ connection, heroCopy, decorateProduct }) => {
                 COUNT(r.id) AS reviewCount
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
-            WHERE p.quantity > 0
+            WHERE p.quantity > 0 AND p.is_deleted = 0
             GROUP BY p.id
             ORDER BY averageRating DESC, reviewCount DESC, p.productName ASC
             LIMIT 8

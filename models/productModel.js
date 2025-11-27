@@ -5,6 +5,7 @@ const createProductModel = (connection) => {
                 p.*,
                 CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
             FROM products p
+            WHERE p.is_deleted = 0
         `;
         connection.query(sql, callback);
     };
@@ -18,7 +19,7 @@ const createProductModel = (connection) => {
                 COUNT(r.id) AS reviewCount
             FROM products p
             LEFT JOIN product_reviews r ON r.product_id = p.id
-            WHERE p.id = ?
+            WHERE p.id = ? AND p.is_deleted = 0
             GROUP BY p.id
         `;
         connection.query(sql, [productId], callback);
@@ -41,7 +42,7 @@ const createProductModel = (connection) => {
                 p.*,
                 CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
             FROM products p
-            WHERE p.id = ?
+            WHERE p.id = ? AND p.is_deleted = 0
         `;
         connection.query(sql, [productId], callback);
     };
@@ -59,7 +60,7 @@ const createProductModel = (connection) => {
     const softDelete = (productId, callback) => {
         const sql = `
             UPDATE products
-            SET quantity = 0, status = 'sold_out'
+            SET quantity = 0, status = 'sold_out', is_deleted = 1
             WHERE id = ?
         `;
         connection.query(sql, [productId], callback);

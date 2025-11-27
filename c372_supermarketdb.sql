@@ -33,6 +33,7 @@ CREATE TABLE `products` (
   `price` double(10,2) NOT NULL,
   `image` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
   `status` enum('in_stock','sold_out') NOT NULL DEFAULT 'in_stock',
+  `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

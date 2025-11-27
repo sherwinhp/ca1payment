@@ -216,6 +216,39 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
         });
     };
 
+    const ensureProductDeleteFlag = (done = () => {}) => {
+        const columnCheckSQL = `
+            SELECT COUNT(*) AS columnExists
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'products'
+              AND COLUMN_NAME = 'is_deleted'
+        `;
+
+        connection.query(columnCheckSQL, (checkErr, results = []) => {
+            if (checkErr) {
+                console.error('Unable to validate product deletion flag:', checkErr);
+                return done();
+            }
+
+            const hasColumn = results[0] && results[0].columnExists;
+            if (hasColumn) {
+                return done();
+            }
+
+            const alterSQL = `
+                ALTER TABLE products
+                ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0
+            `;
+            connection.query(alterSQL, (alterErr) => {
+                if (alterErr) {
+                    console.error('Unable to add product deletion flag:', alterErr);
+                }
+                done();
+            });
+        });
+    };
+
     const ensureShowcaseProducts = () => {
         const showcaseProducts = [
             { productName: 'Oranges', quantity: 60, price: 3.5, image: 'oranges.jpg', status: 'in_stock' },
@@ -288,7 +321,9 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
     ensureCartInfrastructure();
     ensureOrderInfrastructure();
     ensureProductStatusColumn(() => {
-        ensureShowcaseProducts();
+        ensureProductDeleteFlag(() => {
+            ensureShowcaseProducts();
+        });
     });
     ensurePrimaryAdmin();
 };
