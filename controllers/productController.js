@@ -4,6 +4,11 @@ const createReviewModel = require('../models/reviewModel');
 const createProductController = ({ connection, decorateProduct, models = {} }) => {
     const productModel = models.productModel || createProductModel(connection);
     const reviewModel = models.reviewModel || createReviewModel(connection);
+    const computeStatus = (qty) => {
+        if (qty <= 0) return 'sold_out';
+        if (qty < 10) return 'low_stock';
+        return 'in_stock';
+    };
 
     const renderInventory = (req, res) => {
         productModel.getAll((error, results) => {
@@ -86,7 +91,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
         let image = null;
         const qty = Math.max(0, parseInt(quantity, 10) || 0);
         const priceValue = Number(price);
-        const normalizedStatus = qty <= 0 ? 'sold_out' : 'in_stock';
+        const normalizedStatus = computeStatus(qty);
 
         if (priceValue <= 0) {
             req.flash('error', 'Price must be greater than zero.');
@@ -138,7 +143,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
         let image = req.body.currentImage;
         const qty = Math.max(0, parseInt(quantity, 10) || 0);
         const priceValue = Number(price);
-        const normalizedStatus = qty <= 0 ? 'sold_out' : 'in_stock';
+        const normalizedStatus = computeStatus(qty);
 
         if (priceValue <= 0) {
             req.flash('error', 'Price must be greater than zero.');

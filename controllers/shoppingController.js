@@ -3,7 +3,11 @@ const createShoppingController = ({ connection, decorateProduct }) => {
         const shoppingSQL = `
             SELECT
                 p.*,
-                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status,
+                CASE
+                    WHEN p.quantity <= 0 THEN 'sold_out'
+                    WHEN p.quantity < 10 THEN 'low_stock'
+                    ELSE 'in_stock'
+                END AS status,
                 COALESCE(AVG(r.rating), 0) AS averageRating,
                 COUNT(r.id) AS reviewCount
             FROM products p

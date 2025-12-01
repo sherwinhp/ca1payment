@@ -80,13 +80,17 @@ const decorateProduct = (productRow = {}) => {
     const copy = productShowcaseCopy[key] || {};
     const priceNumber = Number(productRow.price || 0);
     const ratingValue = Number(productRow.averageRating || 0);
-    const status = productRow.status || (Number(productRow.quantity) > 0 ? 'in_stock' : 'sold_out');
-    const isSoldOut = status === 'sold_out' || Number(productRow.quantity) <= 0;
+    const qty = Number(productRow.quantity);
+    const status = productRow.status
+        || (qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock');
+    const isSoldOut = status === 'sold_out' || qty <= 0;
+    const isLowStock = status === 'low_stock' && qty > 0;
 
     return {
         ...productRow,
         status,
         isSoldOut,
+        isLowStock,
         showcaseTag: copy.tagline || 'Fresh pick',
         accentColor: copy.accentColor || 'success',
         shortDescription: productRow.description || copy.description || 'Freshly picked produce from trusted growers.',

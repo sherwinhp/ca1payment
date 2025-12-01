@@ -34,10 +34,13 @@
           <td><img src="/images/<%= product.image %>" width="20%" alt="<%= product.productName %>"></td>
           <td><%= product.quantity %></td>
           <td>$<%= Number(product.price).toFixed(2) %></td>
-          <% const status = Number(product.quantity) <= 0 ? 'sold_out' : (product.status === 'sold_out' ? 'sold_out' : 'in_stock'); %>
+          <% const qty = Number(product.quantity) || 0; %>
+          <% const status = qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock'; %>
           <td>
             <% if (status === 'sold_out') { %>
               <span class="badge bg-danger">Sold out</span>
+            <% } else if (status === 'low_stock') { %>
+              <span class="badge bg-warning text-dark">Low stock</span>
             <% } else { %>
               <span class="badge bg-success">In stock</span>
             <% } %>
