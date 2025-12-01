@@ -1,67 +1,140 @@
 <style>
   .quick-nav {
     position: fixed;
-    top: 50%;
-    right: 12px;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    right: 16px;
+    bottom: 76px;
     z-index: 1000;
+    background: rgba(15, 23, 42, 0.94);
+    color: #fff;
+    border-radius: 14px;
+    box-shadow: 0 16px 36px rgba(0,0,0,0.24);
+    padding: 12px;
+    min-width: 220px;
+    display: none;
+  }
+  .quick-nav.open { display: block; }
+  .quick-nav__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .quick-nav__links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
   .quick-nav a {
-    display: block;
-    padding: 0.5rem 0.75rem;
-    border-radius: 999px;
-    background-color: #ffffff;
-    border: 1px solid #ced4da;
-    font-size: 0.9rem;
-    text-align: center;
+    display: inline-block;
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
     text-decoration: none;
+    text-align: center;
     color: #0f172a;
+    background: #fff;
+    font-size: 0.9rem;
+    border: 1px solid transparent;
   }
   .quick-nav a:hover {
-    background-color: #0f172a;
-    color: #ffffff;
+    background: #0ea5e9;
+    color: #fff;
+    border-color: #0ea5e9;
   }
-  @media(max-width: 991px) {
+  .quick-nav .btn-primary {
+    background: #22c55e;
+    color: #0f172a;
+    border-color: #22c55e;
+    font-weight: 700;
+  }
+  .quick-nav .btn-primary:hover {
+    background: #16a34a;
+    color: #fff;
+    border-color: #16a34a;
+  }
+  .quick-nav__toggle {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1001;
+    border: none;
+    border-radius: 999px;
+    padding: 0.55rem 0.85rem;
+    background: #0ea5e9;
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+  }
+  @media (max-width: 991px) {
     .quick-nav {
       position: static;
-      transform: none;
-      flex-direction: row;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: 1.5rem 0;
+      background: #0f172a;
+      color: #fff;
+      margin: 0 0 1rem 0;
+      display: none;
     }
-    .quick-nav a {
-      flex: 1 0 45%;
+    .quick-nav.open { display: block; }
+    .quick-nav__toggle {
+      position: static;
+      margin-bottom: 0.75rem;
     }
   }
 </style>
 
-<div class="quick-nav">
-  <% if (backToHref) { %>
-    <a href="<%= backToHref %>"><%= backToLabel || 'Go back' %></a>
-  <% } %>
-  <a href="/">Home</a>
-
-  <% if (user) { %>
-    <% if (user.role === 'admin') { %>
-      <a href="/inventory">Inventory</a>
-      <a href="/addProduct">Add Product</a>
-      <a href="/shopping">Preview Store</a>
-      <a href="/admin/users">Manage Users</a>
-      <a href="/admin/orders">Orders</a>
-    <% } else { %>
-      <a href="/shopping">Shop</a>
-      <a href="/cart">Cart</a>
-      <a href="/orders">Orders</a>
+<button class="quick-nav__toggle" id="quickNavToggle" type="button" aria-expanded="false">Show quick actions</button>
+<div class="quick-nav" id="quickNavPanel">
+  <div class="quick-nav__header">
+    <span>Quick actions</span>
+    <% if (user) { %>
+      <span class="badge text-bg-light text-dark text-uppercase"><%= user.role %></span>
     <% } %>
-    <a href="/profile">Profile</a>
-    <a href="/logout">Logout</a>
-  <% } else { %>
-    <a href="/shopping">Shop</a>
-    <a href="/register">Register</a>
-    <a href="/login">Login</a>
-  <% } %>
+  </div>
+  <div class="quick-nav__links">
+    <% if (backToHref) { %>
+      <a href="<%= backToHref %>"><%= backToLabel || 'Back' %></a>
+    <% } else { %>
+      <a href="/">Home</a>
+    <% } %>
+
+    <% if (user) { %>
+      <% if (user.role === 'admin') { %>
+        <a href="/inventory" class="btn-primary">Inventory</a>
+        <a href="/addProduct">Add Product</a>
+        <a href="/shopping">Preview Store</a>
+        <a href="/admin/orders">Orders</a>
+        <a href="/admin/users">Manage Users</a>
+      <% } else { %>
+        <a href="/shopping" class="btn-primary">Shop</a>
+        <a href="/cart">Cart</a>
+        <a href="/orders">Orders</a>
+      <% } %>
+      <a href="/profile">Profile</a>
+      <a href="/logout">Logout</a>
+    <% } else { %>
+      <a href="/shopping" class="btn-primary">Shop</a>
+      <a href="/register">Register</a>
+      <a href="/login">Login</a>
+    <% } %>
+  </div>
 </div>
+
+<script>
+  (function() {
+    const toggle = document.getElementById('quickNavToggle');
+    const panel = document.getElementById('quickNavPanel');
+    if (!toggle || !panel) return;
+    const setState = (open) => {
+      panel.classList.toggle('open', open);
+      toggle.textContent = open ? 'Hide quick actions' : 'Show quick actions';
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    setState(false);
+    toggle.addEventListener('click', function() {
+      const isOpen = panel.classList.contains('open');
+      setState(!isOpen);
+    });
+  })();
+</script>

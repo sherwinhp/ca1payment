@@ -1,48 +1,104 @@
-<%- include('partials/header', { pageTitle: 'Add Product', user }) %>
+<%
+  const addStyles = `
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif;
+    }
+    .add-card {
+      border: none;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(6px);
+      color: #e2e8f0;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
+    .add-hero {
+      background: linear-gradient(135deg, #0ea5e9, #22c55e);
+      color: #fff;
+      border-radius: 20px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.28);
+    }
+    .form-control {
+      background: rgba(255,255,255,0.9);
+      border: none;
+      border-radius: 12px;
+      padding: 0.85rem;
+    }
+    .btn-primary {
+      border-radius: 12px;
+      padding: 0.85rem;
+      font-weight: 700;
+      background: #22c55e;
+      border-color: #22c55e;
+      color: #0f172a;
+    }
+    .btn-primary:hover { background: #16a34a; border-color: #16a34a; color: #fff; }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Add Product', user, customStyles: addStyles, bodyClass: 'bg-dark' }) %>
 
-<div class="container mt-4">
-  <h2 class="text-center mb-4">Add New Product</h2>
-  <% if (messages && messages.error && messages.error.length) { %>
-    <div class="alert alert-danger">
-      <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
-    </div>
-  <% } %>
-  <% if (messages && messages.success && messages.success.length) { %>
-    <div class="alert alert-success">
-      <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
-    </div>
-  <% } %>
-  <form action="/addProduct" method="POST" enctype="multipart/form-data" class="mx-auto" style="max-width: 500px;">
-    <div class="mb-3">
-      <label for="name" class="form-label">Product Name</label>
-      <input type="text" class="form-control" id="name" name="name" required>
-    </div>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="add-hero p-4 p-lg-5 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+          <p class="text-uppercase small mb-1" style="letter-spacing: 0.2rem;">Inventory</p>
+          <h2 class="fw-bold mb-1">Add a new product</h2>
+          <p class="mb-0">Upload an image, set stock and price, and keep shoppers updated.</p>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/inventory" class="btn btn-light text-dark">Back to inventory</a>
+          <a href="/shopping" class="btn btn-outline-light">Preview store</a>
+        </div>
+      </div>
 
-    <div class="mb-3">
-      <label for="quantity" class="form-label">Quantity</label>
-      <input type="number" class="form-control" id="quantity" name="quantity" min="0" step="1" required>
-      <small class="text-muted">Status auto-sets: sold out at 0, low stock below 10, in stock at 10 or more.</small>
-    </div>
+      <% if (messages && messages.error && messages.error.length) { %>
+        <div class="alert alert-danger add-card mb-3">
+          <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+        </div>
+      <% } %>
+      <% if (messages && messages.success && messages.success.length) { %>
+        <div class="alert alert-success add-card mb-3">
+          <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+        </div>
+      <% } %>
 
-    <div class="mb-3">
-      <label for="price" class="form-label">Price ($)</label>
-      <input type="number" class="form-control" id="price" name="price" min="0.01" step="0.01" required>
-    </div>
+      <div class="card add-card p-4 p-lg-5">
+        <form action="/addProduct" method="POST" enctype="multipart/form-data" class="d-flex flex-column gap-3">
+          <div>
+            <label for="name" class="form-label fw-semibold">Product Name</label>
+            <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Honeycrisp Apples" required>
+          </div>
 
-    <div class="mb-3">
-      <label for="category" class="form-label">Category</label>
-      <input type="text" class="form-control" id="category" name="category" placeholder="e.g. Fruit, Dairy, Bakery" required>
-    </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="quantity" class="form-label fw-semibold">Quantity</label>
+              <input type="number" class="form-control" id="quantity" name="quantity" min="0" step="1" required>
+              <small class="text-muted">Status auto-sets: 0 = sold out, below 10 = low stock.</small>
+            </div>
+            <div class="col-md-4">
+              <label for="price" class="form-label fw-semibold">Price ($)</label>
+              <input type="number" class="form-control" id="price" name="price" min="0.01" step="0.01" required>
+            </div>
+            <div class="col-md-4">
+              <label for="category" class="form-label fw-semibold">Category</label>
+              <input type="text" class="form-control" id="category" name="category" placeholder="Fruit, Dairy, Bakery" required>
+            </div>
+          </div>
 
-    <div class="mb-4">
-      <label for="image" class="form-label">Product Image</label>
-      <input class="form-control" type="file" id="image" name="image" accept="image/*" required>
-    </div>
+          <div>
+            <label for="image" class="form-label fw-semibold">Product Image</label>
+            <input class="form-control" type="file" id="image" name="image" accept="image/*" required>
+          </div>
 
-    <div class="d-grid">
-      <button type="submit" class="btn btn-primary">Add Product</button>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Add Product</button>
+          </div>
+        </form>
+      </div>
     </div>
-  </form>
+  </div>
 </div>
 
 <%- include('partials/footer') %>

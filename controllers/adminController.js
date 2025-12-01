@@ -1,5 +1,5 @@
 const createAdminController = ({ connection, primaryAdminEmail }) => {
-    const ORDER_STATUSES = ['pending', 'delivering', 'delivered', 'cancelled'];
+    const ORDER_STATUSES = ['pending', 'delivering', 'delivered'];
 
     const renderUserManagement = (req, res) => {
         const listUsersSQL = `

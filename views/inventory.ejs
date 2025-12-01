@@ -1,62 +1,145 @@
-<%- include('partials/header', { pageTitle: 'Inventory', user }) %>
+<%
+  const inventoryStyles = `
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    .inventory-hero {
+      background: linear-gradient(135deg, #0ea5e9, #22c55e);
+      border-radius: 22px;
+      color: #fff;
+      box-shadow: 0 25px 45px rgba(0,0,0,0.24);
+    }
+    .inventory-card {
+      border: none;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.05);
+      color: #e2e8f0;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+      backdrop-filter: blur(6px);
+    }
+    table {
+      color: #e2e8f0;
+      background: transparent;
+    }
+    .table thead th {
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+    .table > :not(caption) > * > * {
+      border-color: rgba(255,255,255,0.08);
+      vertical-align: middle;
+      background-color: transparent !important;
+      color: #e2e8f0;
+    }
+    .table {
+      background: rgba(255,255,255,0.03);
+    }
+    .table-hover tbody tr,
+    .table-striped tbody tr:nth-of-type(odd) {
+      background: rgba(255,255,255,0.02);
+    }
+    .table-hover tbody tr:hover {
+      background: rgba(255,255,255,0.06);
+    }
+    .table a {
+      color: #38bdf8;
+    }
+    .table a:hover {
+      color: #7dd3fc;
+    }
+    .btn-outline-light {
+      border-radius: 12px;
+    }
+    .badge {
+      letter-spacing: 0.03em;
+    }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Inventory', user, customStyles: inventoryStyles, bodyClass: 'bg-dark' }) %>
 
-<div class="container">
-  <p class="mt-3">Welcome, <%= user.username %> (<%= user.role %>)</p>
-  <div class="text-center">
-    <h2>Products from Supermarket App Database</h2>
+<div class="container py-5">
+  <div class="inventory-hero p-4 p-lg-5 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <p class="text-uppercase small mb-2" style="letter-spacing: 0.2rem;">Admin dashboard</p>
+      <h1 class="fw-bold mb-2">Inventory control</h1>
+      <p class="mb-0">Manage products, track stock health, and keep your storefront updated.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="/addProduct" class="btn btn-light text-dark">+ Add product</a>
+      <a href="/shopping" class="btn btn-outline-light">Preview store</a>
+    </div>
   </div>
+
   <% if (messages && messages.error && messages.error.length) { %>
-    <div class="alert alert-danger">
+    <div class="alert alert-danger inventory-card mb-3">
       <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
     </div>
   <% } %>
   <% if (messages && messages.success && messages.success.length) { %>
-    <div class="alert alert-success">
+    <div class="alert alert-success inventory-card mb-3">
       <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
     </div>
   <% } %>
-  <table class="table table-hover small text-center mt-4">
-    <thead>
-      <tr>
-        <th width="100">Product Name</th>
-        <th width="100">Product Image</th>
-        <th width="50">Quantity</th>
-        <th width="50">Price</th>
-        <th width="80">Category</th>
-        <th width="80">Status</th>
-        <th width="50">Edit</th>
-        <th width="50">Delete</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% products.forEach(function(product) { %>
-        <tr>
-        <td><a href="/product/<%= product.id %>"><%= product.productName %></a></td>
-        <td><img src="/images/<%= product.image %>" width="20%" alt="<%= product.productName %>"></td>
-        <td><%= product.quantity %></td>
-        <td>$<%= Number(product.price).toFixed(2) %></td>
-        <td><%= product.category || 'General' %></td>
-        <% const qty = Number(product.quantity) || 0; %>
-        <% const status = qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock'; %>
-        <td>
-          <% if (status === 'sold_out') { %>
-            <span class="badge bg-danger">Sold out</span>
-            <% } else if (status === 'low_stock') { %>
-              <span class="badge bg-warning text-dark">Low stock</span>
-            <% } else { %>
-              <span class="badge bg-success">In stock</span>
-            <% } %>
-          </td>
-          <td><a href="/updateProduct/<%= product.id %>">Edit</a></td>
-          <td>
-            <a href="/deleteProduct/<%= product.id %>" onclick="return confirm('Are you sure you want to delete this product?')">
-              Delete
-            </a>
-          </td>
-        </tr>
-      <% }); %>
-    </tbody>
-  </table>
+
+  <div class="card inventory-card p-3 p-lg-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+      <div>
+        <p class="text-uppercase small mb-1 text-secondary">Welcome, <%= user.username %> (<%= user.role %>)</p>
+        <h4 class="mb-0">Products from Supermarket App Database</h4>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Image</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Edit</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% products.forEach(function(product) { %>
+            <% const qty = Number(product.quantity) || 0; %>
+            <% const status = qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock'; %>
+            <tr>
+              <td>
+                <div class="fw-semibold"><a class="link-light text-decoration-none" href="/product/<%= product.id %>"><%= product.productName %></a></div>
+              </td>
+              <td><img src="/images/<%= product.image %>" width="60" class="rounded" alt="<%= product.productName %>"></td>
+              <td><%= product.quantity %></td>
+              <td>$<%= Number(product.price).toFixed(2) %></td>
+              <td><span class="badge text-bg-light text-dark"><%= product.category || 'General' %></span></td>
+              <td>
+                <% if (status === 'sold_out') { %>
+                  <span class="badge bg-danger">Sold out</span>
+                <% } else if (status === 'low_stock') { %>
+                  <span class="badge bg-warning text-dark">Low stock</span>
+                <% } else { %>
+                  <span class="badge bg-success">In stock</span>
+                <% } %>
+              </td>
+              <td><a class="text-info" href="/updateProduct/<%= product.id %>">Edit</a></td>
+              <td>
+                <a class="text-danger" href="/deleteProduct/<%= product.id %>" onclick="return confirm('Are you sure you want to delete this product?')">
+                  Delete
+                </a>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <%- include('partials/quickNav', { user, backToHref: '/', backToLabel: 'Back to home' }) %>

@@ -1,11 +1,25 @@
-<%- include('partials/header', { pageTitle: 'Invoice', user }) %>
-<% const adminView = typeof isAdminView !== 'undefined' ? isAdminView : false; %>
+<%
+  const adminView = typeof isAdminView !== 'undefined' ? isAdminView : false;
+  const invoiceStyles = adminView
+    ? `
+      body { background: #0b1220; color: #e2e8f0; font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; }
+      .invoice-card { background: rgba(255,255,255,0.04); border: none; border-radius: 18px; color: #e2e8f0; box-shadow: 0 20px 40px rgba(0,0,0,0.25); }
+      .table { color: #e2e8f0; background: rgba(255,255,255,0.03); }
+      .table > :not(caption) > * > * { background-color: transparent !important; border-color: rgba(255,255,255,0.08); color: #e2e8f0; }
+      .table thead th { color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; }
+    `
+    : `
+      body { background: #f8fafc; font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; }
+      .invoice-card { border: none; border-radius: 18px; box-shadow: 0 18px 36px rgba(15,23,42,0.1); }
+    `;
+%>
+<%- include('partials/header', { pageTitle: 'Invoice', user, customStyles: invoiceStyles, bodyClass: adminView ? 'bg-dark' : 'bg-light' }) %>
 
 <div class="container py-5" style="max-width: 960px;">
   <div class="d-flex justify-content-between align-items-start mb-4">
     <div>
-      <h1 class="h3 mb-1">Invoice</h1>
-      <div class="text-muted">Order #<%= order.id %></div>
+      <p class="text-uppercase small text-primary fw-semibold mb-1">Order invoice</p>
+      <h1 class="h3 mb-1">Order #<%= order.id %></h1>
       <div class="text-muted">Placed <%= new Date(order.created_at).toLocaleString() %></div>
       <div class="text-muted">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></div>
     </div>
@@ -23,11 +37,11 @@
     </div>
   </div>
 
-  <div class="card shadow-sm mb-4">
+  <div class="card invoice-card mb-4">
     <div class="card-body">
       <div class="table-responsive">
-        <table class="table table-striped align-middle">
-          <thead>
+        <table class="table align-middle">
+          <thead class="<%= adminView ? '' : 'table-light' %>">
             <tr>
               <th>Product</th>
               <th>Image</th>

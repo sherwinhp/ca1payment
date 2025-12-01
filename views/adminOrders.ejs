@@ -1,40 +1,73 @@
-<%- include('partials/header', { pageTitle: 'All Orders', user }) %>
+<%
+  const adminOrdersStyles = `
+    body { background: #0b1220; color: #e2e8f0; font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; }
+    .orders-hero {
+      background: linear-gradient(135deg, #0ea5e9, #22c55e);
+      border-radius: 22px;
+      color: #fff;
+      box-shadow: 0 25px 45px rgba(0,0,0,0.24);
+    }
+    .orders-card {
+      border: none;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      color: #e2e8f0;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+      backdrop-filter: blur(6px);
+    }
+    .table { color: #e2e8f0; background: rgba(255,255,255,0.03); }
+    .table > :not(caption) > * > * {
+      border-color: rgba(255,255,255,0.08);
+      background-color: transparent !important;
+      color: #e2e8f0;
+    }
+    .table-hover tbody tr,
+    .table-striped tbody tr:nth-of-type(odd) { background: rgba(255,255,255,0.02); }
+    .table-hover tbody tr:hover { background: rgba(255,255,255,0.06); }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'All Orders', user, customStyles: adminOrdersStyles, bodyClass: 'bg-dark' }) %>
 
 <div class="container py-5">
-  <h2 class="mb-4">All Orders</h2>
-
-  <form class="row g-2 mb-3" method="GET" action="/admin/orders">
-    <div class="col-sm-6 col-md-4">
-      <input type="text" name="q" class="form-control" placeholder="Filter by username or email" value="<%= search || '' %>">
+  <div class="orders-hero p-4 p-lg-5 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <p class="text-uppercase small mb-2" style="letter-spacing: 0.2rem;">Admin dashboard</p>
+      <h2 class="fw-bold mb-1">All orders</h2>
+      <p class="mb-0">Review shopper purchases, update statuses, and open invoices.</p>
     </div>
-    <div class="col-auto">
-      <button type="submit" class="btn btn-outline-primary">Filter</button>
-    </div>
-    <% if (search) { %>
+    <form class="row g-2 align-items-center" method="GET" action="/admin/orders">
       <div class="col-auto">
-        <a href="/admin/orders" class="btn btn-link">Clear</a>
+        <input type="text" name="q" class="form-control" placeholder="Filter by username or email" value="<%= search || '' %>">
       </div>
-    <% } %>
-  </form>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-light text-dark">Filter</button>
+      </div>
+      <% if (search) { %>
+        <div class="col-auto">
+          <a href="/admin/orders" class="btn btn-outline-light">Clear</a>
+        </div>
+      <% } %>
+    </form>
+  </div>
 
   <% if (messages && messages.error && messages.error.length) { %>
-    <div class="alert alert-danger rounded-3">
+    <div class="alert alert-danger orders-card mb-3">
       <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
     </div>
   <% } %>
   <% if (messages && messages.success && messages.success.length) { %>
-    <div class="alert alert-success rounded-3">
+    <div class="alert alert-success orders-card mb-3">
       <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
     </div>
   <% } %>
 
   <% if (!orders.length) { %>
-    <p>No orders yet.</p>
+    <div class="alert alert-info orders-card">No orders yet.</div>
   <% } else { %>
     <div class="row g-3">
       <% orders.forEach(function(order) { %>
         <div class="col-12">
-          <div class="card shadow-sm">
+          <div class="card orders-card">
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
                 <div>
@@ -48,13 +81,13 @@
                   <div class="fw-bold fs-5">$<%= Number(order.total_amount).toFixed(2) %></div>
                   <small class="text-capitalize text-muted"><%= order.payment_method %></small>
                   <div class="mt-2">
-                    <a href="/admin/orders/<%= order.id %>/invoice" class="btn btn-sm btn-outline-secondary">Invoice</a>
+                    <a href="/admin/orders/<%= order.id %>/invoice" class="btn btn-sm btn-outline-light">Invoice</a>
                   </div>
                 </div>
               </div>
 
               <div class="table-responsive">
-                <table class="table table-sm align-middle">
+                <table class="table table-hover align-middle">
                   <thead>
                     <tr>
                       <th>Product</th>
@@ -86,14 +119,14 @@
                 </table>
               </div>
 
-              <form action="/admin/orders/<%= order.id %>/status" method="POST" class="d-flex align-items-center gap-2 mt-3">
+              <form action="/admin/orders/<%= order.id %>/status" method="POST" class="d-flex align-items-center gap-2 mt-3 flex-wrap">
                 <label for="status_<%= order.id %>" class="form-label mb-0">Status</label>
                 <select name="status" id="status_<%= order.id %>" class="form-select w-auto">
                   <% statuses.forEach(function(status) { %>
                     <option value="<%= status %>" <%= order.status === status ? 'selected' : '' %>><%= status %></option>
                   <% }); %>
                 </select>
-                <button type="submit" class="btn btn-outline-primary btn-sm">Update</button>
+                <button type="submit" class="btn btn-outline-light btn-sm">Update</button>
               </form>
             </div>
           </div>

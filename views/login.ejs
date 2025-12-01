@@ -1,35 +1,94 @@
-<%- include('partials/header', { pageTitle: 'Login', bodyClass: 'bg-light', user }) %>
+<%
+  const loginStyles = `
+    body {
+      background: radial-gradient(circle at 10% 20%, #e0f4ff 0, transparent 25%),
+                  radial-gradient(circle at 90% 10%, #fef3c7 0, transparent 25%),
+                  radial-gradient(circle at 85% 80%, #dcfce7 0, transparent 25%),
+                  #f7f8fb;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    .auth-card {
+      border: none;
+      border-radius: 24px;
+      box-shadow: 0 25px 45px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+    }
+    .auth-hero {
+      background: linear-gradient(135deg, #0ea5e9, #22c55e);
+      color: #fff;
+    }
+    .auth-hero h1 {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .form-control {
+      border-radius: 12px;
+      padding: 0.75rem;
+    }
+    .btn-primary {
+      border-radius: 12px;
+      padding: 0.75rem;
+      font-weight: 700;
+      background: #0ea5e9;
+      border-color: #0ea5e9;
+    }
+    .btn-primary:hover {
+      background: #0284c7;
+      border-color: #0284c7;
+    }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Login', bodyClass: 'bg-light', user, customStyles: loginStyles }) %>
 
-<div class="container">
-  <h1 class="mt-5">Login</h1>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card auth-card">
+        <div class="row g-0">
+          <div class="col-md-5 auth-hero p-4 d-flex flex-column justify-content-between">
+            <div>
+              <p class="text-uppercase small mb-2" style="letter-spacing: 0.2rem;">Welcome back</p>
+              <h1 class="display-6 mb-3">Sign in to keep shopping.</h1>
+              <p class="mb-0">Track orders, add fresh picks to your cart, and leave reviews for your favourite produce.</p>
+            </div>
+            <div class="mt-4">
+              <p class="small mb-1 text-white-75">New here?</p>
+              <a href="/register" class="btn btn-light w-100">Create an account</a>
+            </div>
+          </div>
+          <div class="col-md-7 p-4 p-lg-5 bg-white">
+            <% if (errors && errors.length > 0) { %>
+              <div class="alert alert-danger rounded-3">
+                <% errors.forEach(function(error) { %>
+                  <div><%= error %></div>
+                <% }); %>
+              </div>
+            <% } %>
 
-  <% if (errors && errors.length > 0) { %>
-    <div class="alert alert-danger">
-      <% errors.forEach(function(error) { %>
-        <p class="mb-0"><%= error %></p>
-      <% }); %>
-    </div>
-  <% } %>
+            <% if (messages && messages.length > 0) { %>
+              <div class="alert alert-success rounded-3">
+                <% messages.forEach(function(message) { %>
+                  <div><%= message %></div>
+                <% }); %>
+              </div>
+            <% } %>
 
-  <% if (messages && messages.length > 0) { %>
-    <div class="alert alert-success">
-      <% messages.forEach(function(message) { %>
-        <p class="mb-0"><%= message %></p>
-      <% }); %>
+            <form action="/login" method="POST" class="d-flex flex-column gap-3 mt-2">
+              <div>
+                <label for="identifier" class="form-label fw-semibold">Email or Username</label>
+                <input type="text" id="identifier" name="identifier" class="form-control" placeholder="you@example.com" required>
+              </div>
+              <div>
+                <label for="password" class="form-label fw-semibold">Password</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100">Login</button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
-  <% } %>
-
-  <form action="/login" method="POST" class="mt-4">
-    <div class="form-group mb-3">
-      <label for="identifier">Email or Username:</label>
-      <input type="text" id="identifier" name="identifier" class="form-control" required>
-    </div>
-    <div class="form-group mb-4">
-      <label for="password">Password:</label>
-      <input type="password" id="password" name="password" class="form-control" required>
-    </div>
-    <button type="submit" class="btn btn-primary">Login</button>
-  </form>
+  </div>
 </div>
 
 <%- include('partials/footer') %>
