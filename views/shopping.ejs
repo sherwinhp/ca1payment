@@ -32,6 +32,9 @@
     <% const currentUser = user || null; %>
     <% const isGuest = !currentUser; %>
     <% const canBuy = currentUser && currentUser.role === 'user'; %>
+    <% const currentSearch = typeof searchTerm === 'string' ? searchTerm : ''; %>
+    <% const currentSort = typeof sortKey === 'string' ? sortKey : ''; %>
+    <% const currentCategory = typeof selectedCategory === 'string' ? selectedCategory : ''; %>
     <% if (messages && messages.success && messages.success.length) { %>
       <div class="alert alert-success">
         <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
@@ -64,6 +67,37 @@
       </div>
     </section>
 
+    <form class="card shadow-sm border-0 mb-4 p-3" method="GET" action="/shopping">
+      <div class="row g-3 align-items-end">
+        <div class="col-lg-5">
+          <label class="form-label small text-uppercase text-muted">Search products</label>
+          <input type="text" name="search" class="form-control" value="<%= currentSearch %>" placeholder="Search by name">
+        </div>
+        <div class="col-lg-3">
+          <label class="form-label small text-uppercase text-muted">Category</label>
+          <select name="category" class="form-select">
+            <option value="" <%= currentCategory === '' ? 'selected' : '' %>>All categories</option>
+            <% if (Array.isArray(categories)) { categories.forEach((cat) => { %>
+              <option value="<%= cat %>" <%= currentCategory === cat ? 'selected' : '' %>><%= cat %></option>
+            <% }) } %>
+          </select>
+        </div>
+        <div class="col-lg-3">
+          <label class="form-label small text-uppercase text-muted">Sort by</label>
+          <select name="sort" class="form-select">
+            <option value="" <%= currentSort === '' ? 'selected' : '' %>>Featured</option>
+            <option value="name_asc" <%= currentSort === 'name_asc' ? 'selected' : '' %>>Name A–Z</option>
+            <option value="name_desc" <%= currentSort === 'name_desc' ? 'selected' : '' %>>Name Z–A</option>
+            <option value="price_asc" <%= currentSort === 'price_asc' ? 'selected' : '' %>>Price: Low to High</option>
+            <option value="price_desc" <%= currentSort === 'price_desc' ? 'selected' : '' %>>Price: High to Low</option>
+          </select>
+        </div>
+        <div class="col-lg-1 d-grid">
+          <button type="submit" class="btn btn-primary">Apply</button>
+        </div>
+      </div>
+    </form>
+
     <% const hasShoppingError = typeof shoppingError !== 'undefined' ? shoppingError : null; %>
     <% if (hasShoppingError) { %>
       <div class="alert alert-warning rounded-4"><%= hasShoppingError %></div>
@@ -87,7 +121,12 @@
                 <img src="<%= productImage %>" alt="<%= product.productName %> photo" class="w-100 h-100">
               </a>
               <div>
-                <h5 class="fw-bold mb-1"><%= product.productName %></h5>
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                  <h5 class="fw-bold mb-0"><%= product.productName %></h5>
+                  <% if (product.category) { %>
+                    <span class="badge text-bg-light text-dark"><%= product.category %></span>
+                  <% } %>
+                </div>
                 <p class="text-muted mb-2"><%= product.shortDescription || product.friendlyDescription || 'Fresh produce ready for you.' %></p>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                   <div class="rating-stars">
@@ -118,11 +157,7 @@
               <% if (canPurchase) { %>
                 <form action="/add-to-cart/<%= product.id %>" method="POST" class="d-flex gap-2">
                   <% const maxQty = Math.max(1, stockCount); %>
-                  <select name="quantity" class="form-select w-auto">
-                    <% for (let q = 1; q <= maxQty; q++) { %>
-                      <option value="<%= q %>"><%= q %> pcs</option>
-                    <% } %>
-                  </select>
+                  <input type="number" name="quantity" class="form-control w-25" min="1" max="<%= maxQty %>" value="1" aria-label="Quantity (max <%= maxQty %>)">
                   <small class="text-muted align-self-center">Max <%= maxQty %></small>
                   <button type="submit" class="btn btn-primary flex-grow-1">Add to cart</button>
                 </form>

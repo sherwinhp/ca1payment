@@ -31,6 +31,11 @@
       </div>
 
       <div class="mb-3">
+        <label for="category" class="form-label">Category</label>
+        <input type="text" class="form-control" id="category" name="category" value="<%= product.category || '' %>" placeholder="e.g. Fruit, Dairy, Bakery" required>
+      </div>
+
+      <div class="mb-3">
         <label class="form-label">Current Image</label>
         <input type="text" class="form-control" name="currentImage" value="<%= product.image %>" readonly>
         <img src="/images/<%= product.image %>" class="img-thumbnail mt-2" style="width: 150px;" alt="<%= product.productName %>">

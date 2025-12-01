@@ -167,11 +167,11 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
 
     const ensureProductStatusColumn = (done = () => {}) => {
         const columnCheckSQL = `
-            SELECT COUNT(*) AS columnExists
+            SELECT DATA_TYPE, COLUMN_TYPE
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = 'products'
-            AND COLUMN_NAME = 'status'
+              AND TABLE_NAME = 'products'
+              AND COLUMN_NAME = 'status'
         `;
 
         connection.query(columnCheckSQL, (checkErr, results = []) => {
@@ -180,16 +180,19 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                 return done();
             }
 
-            const hasStatusColumn = results[0] && results[0].columnExists;
-            if (hasStatusColumn) {
-                return connection.query(
+            const hasStatusColumn = results.length > 0;
+            const needsEnumUpdate =
+                hasStatusColumn && results[0].COLUMN_TYPE.indexOf('low_stock') === -1;
+
+            const normalizeStatuses = () => {
+                connection.query(
                     `
                         UPDATE products
-                        SET status = CASE WHEN quantity <= 0 THEN "sold_out" ELSE "in_stock" END
-                        WHERE status IS NULL
-                           OR status NOT IN ("in_stock","sold_out")
-                           OR (quantity <= 0 AND status <> "sold_out")
-                           OR (quantity > 0 AND status <> "in_stock")
+                        SET status = CASE
+                            WHEN quantity <= 0 THEN 'sold_out'
+                            WHEN quantity < 10 THEN 'low_stock'
+                            ELSE 'in_stock'
+                        END
                     `,
                     (updateErr) => {
                         if (updateErr) {
@@ -198,20 +201,61 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                         done();
                     }
                 );
+            };
+
+            if (hasStatusColumn && !needsEnumUpdate) {
+                return normalizeStatuses();
             }
 
-            const alterProductSQL = `
-                ALTER TABLE products
-                ADD COLUMN status ENUM('in_stock', 'sold_out') NOT NULL DEFAULT 'in_stock'
-            `;
+            const alterProductSQL = hasStatusColumn
+                ? `
+                    ALTER TABLE products
+                    MODIFY status ENUM('in_stock', 'low_stock', 'sold_out') NOT NULL DEFAULT 'in_stock'
+                  `
+                : `
+                    ALTER TABLE products
+                    ADD COLUMN status ENUM('in_stock', 'low_stock', 'sold_out') NOT NULL DEFAULT 'in_stock'
+                  `;
 
             connection.query(alterProductSQL, (error) => {
                 if (error) {
                     console.error('Unable to ensure product status column exists:', error);
+                    return done();
                 }
-                if (!error) {
-                    done();
+                normalizeStatuses();
+            });
+        });
+    };
+
+    const ensureProductCategoryColumn = (done = () => {}) => {
+        const columnCheckSQL = `
+            SELECT COUNT(*) AS columnExists
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'products'
+              AND COLUMN_NAME = 'category'
+        `;
+
+        connection.query(columnCheckSQL, (checkErr, results = []) => {
+            if (checkErr) {
+                console.error('Unable to validate product category column:', checkErr);
+                return done();
+            }
+
+            const hasColumn = results[0] && results[0].columnExists;
+            if (hasColumn) {
+                return done();
+            }
+
+            const alterSQL = `
+                ALTER TABLE products
+                ADD COLUMN category VARCHAR(100) NOT NULL DEFAULT 'General' AFTER image
+            `;
+            connection.query(alterSQL, (alterErr) => {
+                if (alterErr) {
+                    console.error('Unable to add product category column:', alterErr);
                 }
+                done();
             });
         });
     };
@@ -321,8 +365,10 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
     ensureCartInfrastructure();
     ensureOrderInfrastructure();
     ensureProductStatusColumn(() => {
-        ensureProductDeleteFlag(() => {
-            ensureShowcaseProducts();
+        ensureProductCategoryColumn(() => {
+            ensureProductDeleteFlag(() => {
+                ensureShowcaseProducts();
+            });
         });
     });
     ensurePrimaryAdmin();

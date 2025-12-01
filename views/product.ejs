@@ -83,6 +83,9 @@
                         <% } %>
                     </div>
                     <h1 class="fw-bold mt-2"><%= product.productName %></h1>
+                    <% if (product.category) { %>
+                        <p class="text-muted mb-2">Category: <span class="badge text-bg-light text-dark"><%= product.category %></span></p>
+                    <% } %>
                     <p class="text-muted mb-4"><%= product.shortDescription %></p>
                     <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
                         <div class="rating-stars">
@@ -119,12 +122,8 @@
                         <form action="/add-to-cart/<%= product.id %>" method="POST" class="d-flex flex-wrap gap-3">
                             <div>
                                 <label class="form-label small mb-1">Quantity</label>
-                                <select name="quantity" class="form-select">
-                                    <% const maxQty = Math.max(1, Number(product.quantity) || 1); %>
-                                    <% for (let q = 1; q <= maxQty; q++) { %>
-                                        <option value="<%= q %>"><%= q %> pack<%= q === 1 ? '' : 's' %></option>
-                                    <% } %>
-                                </select>
+                                <% const maxQty = Math.max(1, Number(product.quantity) || 1); %>
+                                <input type="number" name="quantity" class="form-control" min="1" max="<%= maxQty %>" value="1" aria-label="Quantity (max <%= maxQty %>)">
                                 <small class="text-muted">Max available: <%= maxQty %></small>
                             </div>
                             <div class="align-self-end flex-grow-1">

@@ -88,6 +88,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
 
     const createProduct = (req, res) => {
         const { name, quantity, price } = req.body;
+        const category = (req.body.category || 'General').trim() || 'General';
         let image = null;
         const qty = Math.max(0, parseInt(quantity, 10) || 0);
         const priceValue = Number(price);
@@ -103,7 +104,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
         }
 
         productModel.create(
-            { name, quantity: qty, price: priceValue, image, status: normalizedStatus },
+            { name, quantity: qty, price: priceValue, image, status: normalizedStatus, category },
             (error) => {
                 if (error) {
                     console.error('Error adding product:', error);
@@ -140,6 +141,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
     const updateProduct = (req, res) => {
         const productId = req.params.id;
         const { name, quantity, price } = req.body;
+        const category = (req.body.category || 'General').trim() || 'General';
         let image = req.body.currentImage;
         const qty = Math.max(0, parseInt(quantity, 10) || 0);
         const priceValue = Number(price);
@@ -155,7 +157,7 @@ const createProductController = ({ connection, decorateProduct, models = {} }) =
         }
 
         productModel.update(
-            { id: productId, name, quantity: qty, price: priceValue, image, status: normalizedStatus },
+            { id: productId, name, quantity: qty, price: priceValue, image, status: normalizedStatus, category },
             (error) => {
                 if (error) {
                     console.error('Error updating product:', error);

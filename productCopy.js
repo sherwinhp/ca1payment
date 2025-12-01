@@ -91,6 +91,7 @@ const decorateProduct = (productRow = {}) => {
         status,
         isSoldOut,
         isLowStock,
+        category: productRow.category || 'General',
         showcaseTag: copy.tagline || 'Fresh pick',
         accentColor: copy.accentColor || 'success',
         shortDescription: productRow.description || copy.description || 'Freshly picked produce from trusted growers.',

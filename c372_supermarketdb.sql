@@ -32,7 +32,8 @@ CREATE TABLE `products` (
   `quantity` int NOT NULL,
   `price` double(10,2) NOT NULL,
   `image` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
-  `status` enum('in_stock','sold_out') NOT NULL DEFAULT 'in_stock',
+  `category` varchar(100) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'General',
+  `status` enum('in_stock','low_stock','sold_out') NOT NULL DEFAULT 'in_stock',
   `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -44,16 +45,16 @@ CREATE TABLE `products` (
 
 LOCK TABLES `products` WRITE;
 /*!40000 ALTER TABLE `products` DISABLE KEYS */;
-INSERT INTO `products` (`id`,`productName`,`quantity`,`price`,`image`,`status`) VALUES 
-(1,'Apples',50,1.50,'apples.png','in_stock'),
-(2,'Bananas',75,0.80,'bananas.png','in_stock'),
-(3,'Milk',50,3.50,'milk.png','in_stock'),
-(4,'Bread',80,1.80,'bread.png','in_stock'),
-(14,'Tomatoes',80,1.50,'tomatoes.png','in_stock'),
-(19,'Broccoli',100,5.00,'Broccoli.png','in_stock'),
-(20,'Oranges',60,3.50,'oranges.jpg','in_stock'),
-(21,'Durian',18,18.00,'durian.jpg','in_stock'),
-(22,'Blueberries',45,4.90,'blueberry.jpg','in_stock');
+INSERT INTO `products` (`id`,`productName`,`quantity`,`price`,`image`,`category`,`status`) VALUES 
+(1,'Apples',50,1.50,'apples.png','Fruit','in_stock'),
+(2,'Bananas',75,0.80,'bananas.png','Fruit','in_stock'),
+(3,'Milk',50,3.50,'milk.png','Dairy','in_stock'),
+(4,'Bread',80,1.80,'bread.png','Bakery','in_stock'),
+(14,'Tomatoes',80,1.50,'tomatoes.png','Vegetable','in_stock'),
+(19,'Broccoli',100,5.00,'Broccoli.png','Vegetable','in_stock'),
+(20,'Oranges',60,3.50,'oranges.jpg','Fruit','in_stock'),
+(21,'Durian',18,18.00,'durian.jpg','Fruit','in_stock'),
+(22,'Blueberries',45,4.90,'blueberry.jpg','Fruit','in_stock');
 /*!40000 ALTER TABLE `products` ENABLE KEYS */;
 UNLOCK TABLES;
 

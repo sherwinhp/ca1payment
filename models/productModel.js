@@ -59,14 +59,14 @@ const createProductModel = (connection) => {
         connection.query(sql, [productId], callback);
     };
 
-    const create = ({ name, quantity, price, image, status }, callback) => {
-        const sql = 'INSERT INTO products (productName, quantity, price, image, status) VALUES (?, ?, ?, ?, ?)';
-        connection.query(sql, [name, quantity, price, image, status], callback);
+    const create = ({ name, quantity, price, image, status, category }, callback) => {
+        const sql = 'INSERT INTO products (productName, quantity, price, image, status, category) VALUES (?, ?, ?, ?, ?, ?)';
+        connection.query(sql, [name, quantity, price, image, status, category], callback);
     };
 
-    const update = ({ id, name, quantity, price, image, status }, callback) => {
-        const sql = 'UPDATE products SET productName = ?, quantity = ?, price = ?, image = ?, status = ? WHERE id = ?';
-        connection.query(sql, [name, quantity, price, image, status, id], callback);
+    const update = ({ id, name, quantity, price, image, status, category }, callback) => {
+        const sql = 'UPDATE products SET productName = ?, quantity = ?, price = ?, image = ?, status = ?, category = ? WHERE id = ?';
+        connection.query(sql, [name, quantity, price, image, status, category, id], callback);
     };
 
     const softDelete = (productId, callback) => {

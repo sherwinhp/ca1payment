@@ -22,6 +22,7 @@
         <th width="100">Product Image</th>
         <th width="50">Quantity</th>
         <th width="50">Price</th>
+        <th width="80">Category</th>
         <th width="80">Status</th>
         <th width="50">Edit</th>
         <th width="50">Delete</th>
@@ -30,15 +31,16 @@
     <tbody>
       <% products.forEach(function(product) { %>
         <tr>
-          <td><a href="/product/<%= product.id %>"><%= product.productName %></a></td>
-          <td><img src="/images/<%= product.image %>" width="20%" alt="<%= product.productName %>"></td>
-          <td><%= product.quantity %></td>
-          <td>$<%= Number(product.price).toFixed(2) %></td>
-          <% const qty = Number(product.quantity) || 0; %>
-          <% const status = qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock'; %>
-          <td>
-            <% if (status === 'sold_out') { %>
-              <span class="badge bg-danger">Sold out</span>
+        <td><a href="/product/<%= product.id %>"><%= product.productName %></a></td>
+        <td><img src="/images/<%= product.image %>" width="20%" alt="<%= product.productName %>"></td>
+        <td><%= product.quantity %></td>
+        <td>$<%= Number(product.price).toFixed(2) %></td>
+        <td><%= product.category || 'General' %></td>
+        <% const qty = Number(product.quantity) || 0; %>
+        <% const status = qty <= 0 ? 'sold_out' : qty < 10 ? 'low_stock' : 'in_stock'; %>
+        <td>
+          <% if (status === 'sold_out') { %>
+            <span class="badge bg-danger">Sold out</span>
             <% } else if (status === 'low_stock') { %>
               <span class="badge bg-warning text-dark">Low stock</span>
             <% } else { %>
