@@ -70,7 +70,7 @@
           <div class="card orders-card">
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-                <div>
+                <div class="me-3">
                   <div class="fw-bold">Order #<%= order.id %></div>
                   <small class="text-muted">
                     Placed: <%= new Date(order.created_at).toLocaleString() %> -
@@ -86,37 +86,52 @@
                 </div>
               </div>
 
-              <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Image</th>
-                      <th>Qty</th>
-                      <th>Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% const items = orderItems[order.id] || []; %>
-                    <% items.forEach(function(item) { 
-                        const displayName = item.productName || item.product_name_snapshot || 'Product';
-                        const image = item.image || item.product_image_snapshot;
-                    %>
-                      <tr>
-                        <td><%= displayName %></td>
-                        <td>
-                          <% if (image) { %>
-                            <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="60" class="img-thumbnail">
-                          <% } else { %>
-                            <span class="text-muted">No image</span>
-                          <% } %>
-                        </td>
-                        <td><%= item.quantity %></td>
-                        <td>$<%= Number(item.price_at_purchase).toFixed(2) %></td>
-                      </tr>
-                    <% }); %>
-                  </tbody>
-                </table>
+              <div class="row g-3 align-items-start">
+                <div class="col-lg-8">
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Image</th>
+                          <th>Qty</th>
+                          <th>Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% const items = orderItems[order.id] || []; %>
+                        <% items.forEach(function(item) { 
+                            const displayName = item.productName || item.product_name_snapshot || 'Product';
+                            const image = item.image || item.product_image_snapshot;
+                        %>
+                          <tr>
+                            <td><%= displayName %></td>
+                            <td>
+                              <% if (image) { %>
+                                <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="60" class="img-thumbnail">
+                              <% } else { %>
+                                <span class="text-muted">No image</span>
+                              <% } %>
+                            </td>
+                            <td><%= item.quantity %></td>
+                            <td>$<%= Number(item.price_at_purchase).toFixed(2) %></td>
+                          </tr>
+                        <% }); %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="col-lg-4">
+                  <div class="orders-card p-3 h-100">
+                    <div class="fw-bold mb-2">User details</div>
+                    <div class="small text-muted mb-1">Username</div>
+                    <div class="mb-2"><%= order.username %></div>
+                    <div class="small text-muted mb-1">Email</div>
+                    <div class="mb-2"><%= order.email %></div>
+                    <div class="small text-muted mb-1">Account role</div>
+                    <div class="text-capitalize"><%= order.role %></div>
+                  </div>
+                </div>
               </div>
 
               <form action="/admin/orders/<%= order.id %>/status" method="POST" class="d-flex align-items-center gap-2 mt-3 flex-wrap">

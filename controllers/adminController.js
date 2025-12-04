@@ -54,6 +54,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     orders: [],
                     orderItems: {},
                     statuses: ORDER_STATUSES,
+                    search,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             }
@@ -64,6 +65,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     orders: [],
                     orderItems: {},
                     statuses: ORDER_STATUSES,
+                    search,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             }
