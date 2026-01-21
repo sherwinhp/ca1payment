@@ -1,0 +1,42 @@
+<%- include('partials/header', { pageTitle: 'NETS QR Payment', user }) %>
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <h3 class="mb-3"><%= title || 'Scan to Pay' %></h3>
+          <p class="text-muted mb-4">Scan the QR with your NETS Pay sandbox app to complete payment.</p>
+          <% if (qrCodeUrl) { %>
+            <img src="<%= qrCodeUrl %>" alt="NETS QR" class="img-fluid mb-3" style="max-width: 320px;">
+          <% } else { %>
+            <div class="alert alert-warning">QR code unavailable.</div>
+          <% } %>
+
+          <div class="d-flex justify-content-center gap-4 my-3">
+            <div>
+              <div class="text-muted small">Amount</div>
+              <div class="fw-bold fs-5">$<%= total %></div>
+            </div>
+            <div>
+              <div class="text-muted small">Txn Ref</div>
+              <div class="fw-semibold"><%= txnRetrievalRef %></div>
+            </div>
+          </div>
+
+          <p class="text-muted small mb-4">Network code: <%= networkCode %> | Timer: <%= timer %>s</p>
+
+          <form action="/payments/nets/complete" method="POST" class="d-grid gap-2">
+            <button class="btn btn-primary">Payment completed? Generate invoice</button>
+            <a href="/checkout" class="btn btn-outline-secondary">Back to checkout</a>
+          </form>
+        </div>
+      </div>
+      <div class="alert alert-info mt-3">
+        This flow uses the NETS sandbox. If the webhook is not available, use the button above after you have approved the payment in your sandbox app.
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

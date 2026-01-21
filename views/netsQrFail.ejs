@@ -1,0 +1,24 @@
+<%- include('partials/header', { pageTitle: 'NETS Payment Error', user }) %>
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h3 class="text-danger mb-3">NETS payment failed</h3>
+          <p class="mb-2"><%= errorMsg || 'An error occurred while generating the NETS QR.' %></p>
+          <p class="text-muted small mb-4">Response code: <%= responseCode %></p>
+          <% if (instructions) { %>
+            <div class="alert alert-info"><%= instructions %></div>
+          <% } %>
+          <div class="d-grid gap-2">
+            <a href="/checkout" class="btn btn-primary">Back to checkout</a>
+            <a href="/cart" class="btn btn-outline-secondary">Back to cart</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>

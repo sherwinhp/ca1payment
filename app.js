@@ -5,6 +5,7 @@ const createHomeController = require('./controllers/homeController');
 const createAuthController = require('./controllers/authController');
 const createShoppingController = require('./controllers/shoppingController');
 const createCartController = require('./controllers/cartController');
+const createPaymentController = require('./controllers/paymentController');
 const createProductController = require('./controllers/productController');
 const createReviewController = require('./controllers/reviewController');
 const createAdminController = require('./controllers/adminController');
@@ -72,6 +73,11 @@ const shoppingController = createShoppingController({
 });
 
 const cartController = createCartController({ connection });
+const paymentController = createPaymentController({
+    connection,
+    getCartForCheckout: cartController.getCartForCheckout,
+    createOrderFromCart: cartController.createOrderFromCart
+});
 
 const productController = createProductController({
     connection,
@@ -103,6 +109,8 @@ app.use(express.static('public'));
 app.use(express.urlencoded({
     extended: false
 }));
+// enable JSON payloads (for PayPal SDK callbacks)
+app.use(express.json());
 
 // Session middleware
 app.use(sessionMiddleware);
@@ -131,6 +139,10 @@ app.post('/cart/delete/:id', requireShopper, cartController.deleteCartItem);
 app.post('/cart/clear', requireShopper, cartController.clearCart);
 app.get('/checkout', requireShopper, cartController.renderCheckout);
 app.post('/checkout', requireShopper, cartController.placeOrder);
+app.post('/payments/paypal/create', requireShopper, paymentController.createPaypalOrder);
+app.post('/payments/paypal/capture', requireShopper, paymentController.capturePaypalOrder);
+app.post('/payments/nets', requireShopper, paymentController.startNetsPayment);
+app.post('/payments/nets/complete', requireShopper, paymentController.finishNetsPayment);
 app.get('/checkout/success/:orderId', requireShopper, cartController.renderOrderSuccess);
 app.get('/orders', requireShopper, cartController.renderOrderHistory);
 app.get('/orders/:id/invoice', requireShopper, cartController.renderInvoice);

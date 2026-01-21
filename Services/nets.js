@@ -59,6 +59,7 @@ exports.generateQrCode = async (req, res) => {
         total: cartTotal,
         title: "Scan to Pay",
         qrCodeUrl: `data:image/png;base64,${qrData.qr_code}`,
+        user: req.session?.user,
         txnRetrievalRef: txnRetrievalRef,
         courseInitId: courseInitId,
         networkCode: qrData.network_status,
@@ -77,6 +78,7 @@ exports.generateQrCode = async (req, res) => {
       }
       res.render("netsQrFail", {
         title: "Error",
+        user: req.session?.user,
         responseCode: qrData.response_code || "N.A.",
         instructions: qrData.instruction || "",
         errorMsg: errorMsg,
@@ -84,6 +86,12 @@ exports.generateQrCode = async (req, res) => {
     }
   } catch (error) {
     console.error("Error in generateQrCode:", error.message);
-    res.redirect("/nets-qr/fail");
+    res.render("netsQrFail", {
+      title: "Error",
+      user: req.session?.user,
+      responseCode: "N.A.",
+      instructions: "",
+      errorMsg: "Unable to generate NETS QR at the moment. Please try again."
+    });
   }
 };

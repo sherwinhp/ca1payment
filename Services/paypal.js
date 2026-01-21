@@ -31,7 +31,7 @@ async function createOrder(amount) {
       purchase_units: [{
         amount: {
           currency_code: 'SGD',
-          value: amount
+          value: String(amount)
         }
       }]
     })

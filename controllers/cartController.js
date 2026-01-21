@@ -1,5 +1,176 @@
 const createCartController = ({ connection }) => {
-    const PAYMENT_METHODS = ['card', 'paynow', 'cash'];
+    const PAYMENT_METHODS = ['card', 'paypal', 'nets'];
+    const checkoutCartSQL = `
+            SELECT
+                ci.product_id AS productId,
+                ci.quantity,
+                p.productName,
+                p.price,
+                p.image,
+                p.quantity AS stock,
+                p.status
+            FROM cart_items ci
+            INNER JOIN products p ON p.id = ci.product_id
+            WHERE ci.user_id = ?
+            ORDER BY ci.created_at ASC, ci.id ASC
+        `;
+
+    const getCartForCheckout = (userId) =>
+        new Promise((resolve, reject) => {
+            connection.query(checkoutCartSQL, [userId], (error, items = []) => {
+                if (error) {
+                    return reject(error);
+                }
+                resolve(items);
+            });
+        });
+
+    const createOrderFromCart = (userId, paymentMethod) =>
+        new Promise((resolve, reject) => {
+            connection.query(checkoutCartSQL, [userId], (cartErr, items = []) => {
+                if (cartErr) {
+                    return reject(new Error('Unable to load cart for order.'));
+                }
+
+                if (!items.length) {
+                    return reject(new Error('Your cart is empty.'));
+                }
+
+                let normalizedItems;
+                try {
+                    normalizedItems = items.map((item) => {
+                        const stockCount = Number(item.stock) || 0;
+                        const status = item.status === 'sold_out' || stockCount <= 0 ? 'sold_out' : 'in_stock';
+
+                        if (status === 'sold_out' || stockCount <= 0) {
+                            throw new Error(`"${item.productName}" is sold out.`);
+                        }
+
+                        const safeQuantity = Math.max(1, Math.min(Number(item.quantity) || 1, stockCount));
+                        if (safeQuantity !== item.quantity) {
+                            throw new Error(`"${item.productName}" has limited stock.`);
+                        }
+
+                        return {
+                            ...item,
+                            safeQuantity,
+                            lineTotal: Number(item.price) * safeQuantity
+                        };
+                    });
+                } catch (err) {
+                    return reject(err);
+                }
+
+                const orderSummary = normalizedItems.reduce(
+                    (acc, item) => {
+                        acc.total += item.lineTotal;
+                        return acc;
+                    },
+                    { total: 0 }
+                );
+                const totalAmount = orderSummary.total;
+
+                connection.beginTransaction((txErr) => {
+                    if (txErr) {
+                        return reject(new Error('Unable to start order transaction.'));
+                    }
+
+                    const insertOrderSQL = `
+                        INSERT INTO orders (user_id, total_amount, payment_method, status)
+                        VALUES (?, ?, ?, 'pending')
+                    `;
+
+                    connection.query(
+                        insertOrderSQL,
+                        [userId, totalAmount.toFixed(2), paymentMethod],
+                        (orderErr, orderResult) => {
+                            if (orderErr) {
+                                return connection.rollback(() =>
+                                    reject(new Error('Unable to create order. Please try again.'))
+                                );
+                            }
+
+                            const orderId = orderResult.insertId;
+                            const orderItemValues = normalizedItems
+                                .map(() => '(?, ?, ?, ?, ?, ?)')
+                                .join(', ');
+                            const orderItemParams = normalizedItems.flatMap((item) => [
+                                orderId,
+                                item.productId,
+                                item.productName,
+                                item.image,
+                                item.safeQuantity,
+                                Number(item.price).toFixed(2)
+                            ]);
+
+                            const insertItemsSQL = `
+                                INSERT INTO order_items (order_id, product_id, product_name_snapshot, product_image_snapshot, quantity, price_at_purchase)
+                                VALUES ${orderItemValues}
+                            `;
+
+                            connection.query(insertItemsSQL, orderItemParams, (itemsErr) => {
+                                if (itemsErr) {
+                                    return connection.rollback(() =>
+                                        reject(new Error('Unable to add order items. Please try again.'))
+                                    );
+                                }
+
+                                const updateStockTasks = normalizedItems.map(
+                                    (item) =>
+                                        new Promise((resolveStock, rejectStock) => {
+                                            const updateStockSQL = `
+                                                UPDATE products
+                                                SET quantity = quantity - ?, status = CASE WHEN quantity - ? <= 0 THEN 'sold_out' ELSE status END
+                                                WHERE id = ? AND quantity >= ?
+                                            `;
+                                            connection.query(
+                                                updateStockSQL,
+                                                [item.safeQuantity, item.safeQuantity, item.productId, item.safeQuantity],
+                                                (stockErr, stockResult) => {
+                                                    if (stockErr || !stockResult.affectedRows) {
+                                                        return rejectStock(
+                                                            new Error(`Unable to reserve stock for "${item.productName}".`)
+                                                        );
+                                                    }
+                                                    resolveStock();
+                                                }
+                                            );
+                                        })
+                                );
+
+                                Promise.all(updateStockTasks)
+                                    .then(() => {
+                                        connection.query(
+                                            'DELETE FROM cart_items WHERE user_id = ?',
+                                            [userId],
+                                            (clearErr) => {
+                                                if (clearErr) {
+                                                    return connection.rollback(() =>
+                                                        reject(new Error('Unable to clear cart after order.'))
+                                                    );
+                                                }
+
+                                                connection.commit((commitErr) => {
+                                                    if (commitErr) {
+                                                        return connection.rollback(() =>
+                                                            reject(new Error('Unable to finalize order. Please try again.'))
+                                                        );
+                                                    }
+
+                                                    resolve(orderId);
+                                                });
+                                            }
+                                        );
+                                    })
+                                    .catch((stockErr) => {
+                                        connection.rollback(() => reject(stockErr));
+                                    });
+                            });
+                        }
+                    );
+                });
+            });
+        });
 
     const addToCart = (req, res) => {
         const productId = parseInt(req.params.id, 10);
@@ -177,213 +348,55 @@ const createCartController = ({ connection }) => {
 
     const renderCheckout = (req, res) => {
         const userId = req.session.user.id;
-        const cartSQL = `
-            SELECT
-                ci.product_id AS productId,
-                ci.quantity,
-                p.productName,
-                p.price,
-                p.image,
-                p.quantity AS stock,
-                CASE WHEN p.quantity <= 0 THEN 'sold_out' ELSE 'in_stock' END AS status
-            FROM cart_items ci
-            INNER JOIN products p ON p.id = ci.product_id
-            WHERE ci.user_id = ?
-            ORDER BY ci.created_at ASC, ci.id ASC
-        `;
+        getCartForCheckout(userId)
+            .then((items) => {
+                if (!items.length) {
+                    req.flash('error', 'Your cart is empty.');
+                    return res.redirect('/cart');
+                }
 
-        connection.query(cartSQL, [userId], (error, items = []) => {
-            if (error) {
+                const summary = items.reduce(
+                    (acc, item) => {
+                        const lineTotal = Number(item.price) * Number(item.quantity || 0);
+                        acc.total += lineTotal;
+                        return acc;
+                    },
+                    { total: 0 }
+                );
+
+                res.render('checkout', {
+                    user: req.session.user,
+                    cart: items,
+                    total: summary.total.toFixed(2),
+                    paymentMethods: PAYMENT_METHODS,
+                    selectedMethod: PAYMENT_METHODS[0],
+                    paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
+                    messages: {
+                        error: req.flash('error'),
+                        success: req.flash('success')
+                    }
+                });
+            })
+            .catch((error) => {
                 console.error('Unable to load cart for checkout:', error);
                 req.flash('error', 'Unable to load checkout right now.');
-                return res.redirect('/cart');
-            }
-
-            if (!items.length) {
-                req.flash('error', 'Your cart is empty.');
-                return res.redirect('/cart');
-            }
-
-            const summary = items.reduce(
-                (acc, item) => {
-                    const lineTotal = Number(item.price) * Number(item.quantity || 0);
-                    acc.total += lineTotal;
-                    return acc;
-                },
-                { total: 0 }
-            );
-
-            res.render('checkout', {
-                user: req.session.user,
-                cart: items,
-                total: summary.total.toFixed(2),
-                paymentMethods: PAYMENT_METHODS,
-                selectedMethod: PAYMENT_METHODS[0],
-                messages: {
-                    error: req.flash('error'),
-                    success: req.flash('success')
-                }
+                res.redirect('/cart');
             });
-        });
     };
 
     const placeOrder = (req, res) => {
         const userId = req.session.user.id;
         const paymentMethod = PAYMENT_METHODS.includes(req.body.paymentMethod) ? req.body.paymentMethod : PAYMENT_METHODS[0];
 
-        const cartSQL = `
-            SELECT
-                ci.product_id AS productId,
-                ci.quantity,
-                p.productName,
-                p.price,
-                p.quantity AS stock,
-                p.status,
-                p.image
-            FROM cart_items ci
-            INNER JOIN products p ON p.id = ci.product_id
-            WHERE ci.user_id = ?
-            ORDER BY ci.created_at ASC, ci.id ASC
-        `;
-
-        connection.query(cartSQL, [userId], (cartErr, items = []) => {
-            if (cartErr) {
-                console.error('Unable to load cart for order:', cartErr);
-                req.flash('error', 'Unable to place order right now.');
-                return res.redirect('/cart');
-            }
-
-            if (!items.length) {
-                req.flash('error', 'Your cart is empty.');
-                return res.redirect('/cart');
-            }
-
-            const normalizedItems = [];
-            let totalAmount = 0;
-            for (const item of items) {
-                const stockCount = Number(item.stock) || 0;
-                const status = stockCount <= 0 ? 'sold_out' : 'in_stock';
-                if (status === 'sold_out' || stockCount <= 0) {
-                    req.flash('error', `${item.productName} is sold out and was removed from your cart.`);
-                    return res.redirect('/cart');
-                }
-                const safeQty = Math.min(Number(item.quantity) || 1, stockCount);
-                if (safeQty <= 0) {
-                    req.flash('error', `${item.productName} is sold out and was removed from your cart.`);
-                    return res.redirect('/cart');
-                }
-                const price = Number(item.price);
-                totalAmount += price * safeQty;
-                normalizedItems.push({
-                    ...item,
-                    quantity: safeQty,
-                    price
-                });
-            }
-
-            connection.beginTransaction((txErr) => {
-                if (txErr) {
-                    console.error('Unable to start order transaction:', txErr);
-                    req.flash('error', 'Unable to place order right now.');
-                    return res.redirect('/cart');
-                }
-
-                const insertOrderSQL = `
-                    INSERT INTO orders (user_id, total_amount, payment_method, status)
-                    VALUES (?, ?, ?, 'pending')
-                `;
-
-                connection.query(insertOrderSQL, [userId, totalAmount.toFixed(2), paymentMethod], (orderErr, orderResult) => {
-                    if (orderErr) {
-                        console.error('Unable to create order:', orderErr);
-                        return connection.rollback(() => {
-                            req.flash('error', 'Unable to place order right now.');
-                            res.redirect('/cart');
-                        });
-                    }
-
-                    const orderId = orderResult.insertId;
-                    const orderItemValues = normalizedItems
-                        .map(() => '(?, ?, ?, ?, ?, ?)')
-                        .join(', ');
-                    const orderItemParams = normalizedItems.flatMap((item) => [
-                        orderId,
-                        item.productId,
-                        item.productName,
-                        item.image,
-                        item.quantity,
-                        item.price
-                    ]);
-
-                    const insertItemsSQL = `
-                        INSERT INTO order_items (order_id, product_id, product_name_snapshot, product_image_snapshot, quantity, price_at_purchase)
-                        VALUES ${orderItemValues}
-                    `;
-
-                    connection.query(insertItemsSQL, orderItemParams, (itemsErr) => {
-                        if (itemsErr) {
-                            console.error('Unable to insert order items:', itemsErr);
-                            return connection.rollback(() => {
-                                req.flash('error', 'Unable to place order right now.');
-                                res.redirect('/cart');
-                            });
-                        }
-
-                        const updateStockTasks = normalizedItems.map(
-                            (item) =>
-                                new Promise((resolve, reject) => {
-                                    connection.query(
-                                        `
-                                            UPDATE products
-                                            SET
-                                                quantity = GREATEST(0, quantity - ?),
-                                                status = CASE WHEN quantity - ? <= 0 THEN 'sold_out' ELSE status END
-                                            WHERE id = ?
-                                        `,
-                                        [item.quantity, item.quantity, item.productId],
-                                        (stockErr) => {
-                                            if (stockErr) return reject(stockErr);
-                                            resolve();
-                                        }
-                                    );
-                                })
-                        );
-
-                        Promise.all(updateStockTasks)
-                            .then(() => {
-                                connection.query('DELETE FROM cart_items WHERE user_id = ?', [userId], (clearErr) => {
-                                    if (clearErr) {
-                                        console.error('Unable to clear cart after order:', clearErr);
-                                        return connection.rollback(() => {
-                                            req.flash('error', 'Unable to place order right now.');
-                                            res.redirect('/cart');
-                                        });
-                                    }
-
-                                    connection.commit((commitErr) => {
-                                        if (commitErr) {
-                                            console.error('Unable to commit order:', commitErr);
-                                            return connection.rollback(() => {
-                                                req.flash('error', 'Unable to place order right now.');
-                                                res.redirect('/cart');
-                                            });
-                                        }
-
-                                        res.redirect(`/checkout/success/${orderId}`);
-                                    });
-                                });
-                            })
-                            .catch((stockErr) => {
-                                console.error('Unable to update stock:', stockErr);
-                                connection.rollback(() => {
-                                    req.flash('error', 'Unable to place order right now.');
-                                    res.redirect('/cart');
-                                });
-                            });
-                    });
-                });
+        createOrderFromCart(userId, paymentMethod)
+            .then((orderId) => {
+                res.redirect(`/checkout/success/${orderId}`);
+            })
+            .catch((error) => {
+                console.error('Unable to place order:', error);
+                req.flash('error', error.message || 'Unable to place order right now.');
+                res.redirect('/cart');
             });
-        });
     };
 
     const renderOrderSuccess = (req, res) => {
@@ -559,7 +572,9 @@ const createCartController = ({ connection }) => {
         renderOrderSuccess,
         renderOrderHistory,
         clearCart,
-        renderInvoice
+        renderInvoice,
+        getCartForCheckout,
+        createOrderFromCart
     };
 };
 
