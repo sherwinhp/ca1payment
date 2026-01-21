@@ -1,10 +1,15 @@
 require('dotenv').config();
+const fetch = global.fetch || require('node-fetch');
 
 const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 const PAYPAL_API = process.env.PAYPAL_API;
 
 async function getAccessToken() {
+  if (!PAYPAL_CLIENT || !PAYPAL_SECRET || !PAYPAL_API) {
+    throw new Error('PayPal is not configured. Check PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_API.');
+  }
+
   const response = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -14,6 +19,9 @@ async function getAccessToken() {
     body: 'grant_type=client_credentials'
   });
   const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error_description || data?.error || 'Unable to get PayPal access token.');
+  }
   return data.access_token;
 }
 
@@ -35,7 +43,11 @@ async function createOrder(amount) {
       }]
     })
   });
-  return await response.json();
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || data?.name || 'Unable to create PayPal order.');
+  }
+  return data;
 }
 
 async function captureOrder(orderId) {
@@ -49,6 +61,9 @@ async function captureOrder(orderId) {
   });
   const data = await response.json();
   console.log('PayPal captureOrder response:', data);
+  if (!response.ok) {
+    throw new Error(data?.message || data?.name || 'Unable to capture PayPal order.');
+  }
   return data;
 }
 

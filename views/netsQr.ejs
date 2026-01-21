@@ -7,6 +7,7 @@
         <div class="card-body text-center">
           <h3 class="mb-3"><%= title || 'Scan to Pay' %></h3>
           <p class="text-muted mb-4">Scan the QR with your NETS Pay sandbox app to complete payment.</p>
+          <p class="text-muted small mb-4" id="netsStatus">Waiting for NETS payment confirmation...</p>
           <% if (qrCodeUrl) { %>
             <img src="<%= qrCodeUrl %>" alt="NETS QR" class="img-fluid mb-3" style="max-width: 320px;">
           <% } else { %>
@@ -24,19 +25,93 @@
             </div>
           </div>
 
-          <p class="text-muted small mb-4">Network code: <%= networkCode %> | Timer: <%= timer %>s</p>
+          <p class="text-muted small mb-4">
+            Network code: <span id="netsNetworkCode"><%= typeof networkCode === 'undefined' || networkCode === null ? 'N.A.' : networkCode %></span>
+            | Timer: <span id="netsTimer"><%= timer %>s</span>
+          </p>
 
-          <form action="/payments/nets/complete" method="POST" class="d-grid gap-2">
-            <button class="btn btn-primary">Payment completed? Generate invoice</button>
+          <div class="d-grid gap-2">
             <a href="/checkout" class="btn btn-outline-secondary">Back to checkout</a>
-          </form>
+          </div>
         </div>
       </div>
       <div class="alert alert-info mt-3">
-        This flow uses the NETS sandbox. If the webhook is not available, use the button above after you have approved the payment in your sandbox app.
+        This flow uses the NETS sandbox. We will update this page once NETS confirms the payment.
       </div>
     </div>
   </div>
 </div>
 
 <%- include('partials/footer') %>
+
+<script>
+  (function () {
+    const txnRetrievalRef = "<%= txnRetrievalRef %>";
+    if (!txnRetrievalRef) return;
+
+    const statusEl = document.getElementById('netsStatus');
+    const timerEl = document.getElementById('netsTimer');
+    const initialSeconds = Number("<%= timer %>") || 300;
+    let remainingSeconds = initialSeconds;
+    const statusUrl = `/payments/nets/status/${txnRetrievalRef}`;
+    const source = new EventSource(statusUrl);
+
+    const redirectFail = (reason) => {
+      source.close();
+      const target = `/payments/nets/fail?reason=${encodeURIComponent(reason || 'failed')}&txn_retrieval_ref=${encodeURIComponent(txnRetrievalRef)}`;
+      window.location.href = target;
+    };
+
+    source.addEventListener('message', (event) => {
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (err) {
+        return;
+      }
+
+      if (data.success) {
+        source.close();
+        window.location.href = `/payments/nets/complete?txn_retrieval_ref=${encodeURIComponent(txnRetrievalRef)}`;
+        return;
+      }
+
+      if (data.fail) {
+        redirectFail('failed');
+        return;
+      }
+
+      if (data.error) {
+        redirectFail('error');
+        return;
+      }
+    });
+
+    source.addEventListener('error', () => {
+      redirectFail('error');
+    });
+
+    if (statusEl) {
+      statusEl.textContent = 'Checking NETS payment status...';
+    }
+
+    if (timerEl) {
+      const formatTime = (seconds) => {
+        const safeSeconds = Math.max(0, seconds);
+        const minutes = Math.floor(safeSeconds / 60);
+        const secs = safeSeconds % 60;
+        return `${minutes}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      timerEl.textContent = formatTime(remainingSeconds);
+      const countdown = setInterval(() => {
+        remainingSeconds -= 1;
+        timerEl.textContent = formatTime(remainingSeconds);
+        if (remainingSeconds <= 0) {
+          clearInterval(countdown);
+          redirectFail('timeout');
+        }
+      }, 1000);
+    }
+  })();
+</script>

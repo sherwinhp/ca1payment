@@ -47,7 +47,7 @@
           <h5 class="card-title">Pay with PayPal (Sandbox)</h5>
           <% if (paypalClientId) { %>
             <div id="paypal-button-container" class="mb-3"></div>
-            <p class="small text-muted mb-0">Use your sandbox PayPal or sandbox card to complete payment.</p>
+            <p class="small text-muted mb-0">Use your sandbox PayPal account to complete payment.</p>
           <% } else { %>
             <div class="alert alert-warning">PayPal is not configured. Add PAYPAL_CLIENT_ID to enable.</div>
           <% } %>
@@ -66,7 +66,7 @@
 
       <div class="card shadow-sm mt-4">
         <div class="card-body">
-          <h5 class="card-title">Pay with Credit Card</h5>
+          <h5 class="card-title">Pay with Credit/Debit Card</h5>
           <form action="/checkout" method="POST" class="d-grid gap-2">
             <input type="hidden" name="paymentMethod" value="card">
             <div class="form-floating">
@@ -74,19 +74,19 @@
               <label for="cardName">Cardholder name</label>
             </div>
             <div class="form-floating">
-              <input type="text" class="form-control" id="cardNumber" name="cardNumber" placeholder="0000 0000 0000 0000" maxlength="23" required>
+              <input type="text" class="form-control" id="cardNumber" name="cardNumber" placeholder="0000 0000 0000 0000" maxlength="23" required inputmode="numeric" autocomplete="cc-number">
               <label for="cardNumber">Card number</label>
             </div>
             <div class="row g-2">
               <div class="col-6">
                 <div class="form-floating">
-                  <input type="text" class="form-control" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required>
+                  <input type="text" class="form-control" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required inputmode="numeric" autocomplete="cc-exp">
                   <label for="expiry">Expiry (MM/YY)</label>
                 </div>
               </div>
               <div class="col-6">
                 <div class="form-floating">
-                  <input type="text" class="form-control" id="cvv" name="cvv" placeholder="123" maxlength="4" required>
+                  <input type="text" class="form-control" id="cvv" name="cvv" placeholder="123" maxlength="4" required inputmode="numeric" autocomplete="cc-csc">
                   <label for="cvv">CVV</label>
                 </div>
               </div>
@@ -104,19 +104,25 @@
 <%- include('partials/footer') %>
 
 <% if (paypalClientId) { %>
-  <script src="https://www.paypal.com/sdk/js?client-id=<%= paypalClientId %>&currency=SGD&intent=capture"></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=<%= paypalClientId %>&currency=SGD&intent=capture&disable-funding=card"></script>
   <script>
     (function initPayPal() {
       if (!window.paypal) return;
       paypal.Buttons({
+        fundingSource: paypal.FUNDING.PAYPAL,
         style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
         createOrder: () => {
           return fetch('/payments/paypal/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           })
-            .then((res) => res.json())
-            .then((data) => data.id)
+            .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+              if (!ok || !data.id) {
+                throw new Error(data.error || 'Unable to start PayPal checkout right now.');
+              }
+              return data.id;
+            })
             .catch(() => {
               alert('Unable to start PayPal checkout right now.');
             });
@@ -127,13 +133,13 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orderId: data.orderID })
           })
-            .then((res) => res.json())
-            .then((result) => {
-              if (result && result.redirectUrl) {
+            .then((res) => res.json().then((result) => ({ ok: res.ok, result })))
+            .then(({ ok, result }) => {
+              if (ok && result && result.redirectUrl) {
                 window.location.href = result.redirectUrl;
                 return;
               }
-              alert(result.error || 'Unable to finalize PayPal payment.');
+              alert(result?.error || 'Unable to finalize PayPal payment.');
             })
             .catch(() => {
               alert('Unable to finalize PayPal payment.');

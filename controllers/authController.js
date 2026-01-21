@@ -50,8 +50,11 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
         const { identifier, password } = req.body;
 
         if (!identifier || !password) {
-            req.flash('error', 'Email/username and password are required.');
-            return res.redirect('/login');
+            return res.status(400).render('login', {
+                messages: [],
+                errors: ['Email/username and password are required.'],
+                user: req.session.user
+            });
         }
 
         const sql = 'SELECT * FROM users WHERE (email = ? OR username = ?) AND password = SHA1(?)';
@@ -69,8 +72,11 @@ const createAuthController = ({ connection, primaryAdminEmail }) => {
                     res.redirect('/inventory');
                 }
             } else {
-                req.flash('error', 'Invalid email/username or password.');
-                res.redirect('/login');
+                res.status(401).render('login', {
+                    messages: [],
+                    errors: ['Invalid email/username or password.'],
+                    user: req.session.user
+                });
             }
         });
     };

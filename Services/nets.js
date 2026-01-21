@@ -55,6 +55,13 @@ exports.generateQrCode = async (req, res) => {
       // Store transaction retrieval reference for later use
       const txnRetrievalRef = qrData.txn_retrieval_ref;
       const courseInitId = getCourseInitIdParam();
+      if (req.session) {
+        req.session.netsPayment = {
+          status: "pending",
+          txnRetrievalRef,
+          startedAt: Date.now()
+        };
+      }
 
       const webhookUrl = `https://sandbox.nets.openapipaas.com/api/v1/common/payments/nets/webhook?txn_retrieval_ref=${txnRetrievalRef}&course_init_id=${courseInitId}`;
 
@@ -64,7 +71,7 @@ exports.generateQrCode = async (req, res) => {
 
       
       // Render the QR code page with required data
-      res.render("netsQr", {
+      return res.render("netsQr", {
         total: cartTotal,
         title: "Scan to Pay",
         qrCodeUrl: `data:image/png;base64,${qrData.qr_code}`,
@@ -85,7 +92,7 @@ exports.generateQrCode = async (req, res) => {
     if (qrData.network_status !== 0) {
       errorMsg = qrData.error_message || "Transaction failed. Please try again.";
     }
-    res.render("netsQrFail", {
+    return res.render("netsQrFail", {
       title: "Error",
       user: req.session?.user,
       responseCode: qrData.response_code || "N.A.",
@@ -94,7 +101,7 @@ exports.generateQrCode = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in generateQrCode:", error.message);
-    res.render("netsQrFail", {
+    return res.render("netsQrFail", {
       title: "Error",
       user: req.session?.user,
       responseCode: "N.A.",
