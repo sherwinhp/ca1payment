@@ -1,4 +1,3 @@
-const fetch = require('node-fetch');
 require('dotenv').config();
 
 const PAYPAL_CLIENT = process.env.PAYPAL_CLIENT_ID;

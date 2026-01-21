@@ -1,5 +1,3 @@
-const axios = require("axios");
-
 exports.generateQrCode = async (req, res) => {
   const { cartTotal } = req.body;
   console.log(cartTotal);
@@ -10,16 +8,31 @@ exports.generateQrCode = async (req, res) => {
       notify_mobile: 0,
     };
 
-    const response = await axios.post(
+    const response = await fetch(
       `https://sandbox.nets.openapipaas.com/api/v1/common/payments/nets-qr/request`,
-      requestBody,
       {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           "api-key": process.env.API_KEY,
           "project-id": process.env.PROJECT_ID,
         },
+        body: JSON.stringify(requestBody),
       }
     );
+
+    const responseData = await response.json();
+
+    if (!response.ok || !responseData?.result?.data) {
+      console.error("NETS API error:", response.status, responseData);
+      return res.render("netsQrFail", {
+        title: "Error",
+        user: req.session?.user,
+        responseCode: responseData?.code || responseData?.result?.code || response.status || "N.A.",
+        instructions: responseData?.message || responseData?.result?.message || "",
+        errorMsg: "Unable to generate NETS QR. Check API credentials and request payload."
+      });
+    }
 
     const getCourseInitIdParam = () => {
       try {
@@ -33,14 +46,10 @@ exports.generateQrCode = async (req, res) => {
       }
     };
 
-    const qrData = response.data.result.data;
+    const qrData = responseData.result.data;
     console.log({ qrData });
 
-    if (
-      qrData.response_code === "00" &&
-      qrData.txn_status === 1 &&
-      qrData.qr_code
-    ) {
+    if (qrData.response_code === "00" && qrData.txn_status === 1 && qrData.qr_code) {
       console.log("QR code generated successfully");
 
       // Store transaction retrieval reference for later use
@@ -65,25 +74,24 @@ exports.generateQrCode = async (req, res) => {
         networkCode: qrData.network_status,
         timer: 300, // Timer in seconds
         webhookUrl: webhookUrl,
-         fullNetsResponse: response.data,
+         fullNetsResponse: responseData,
         apiKey: process.env.API_KEY,
         projectId: process.env.PROJECT_ID,
       });
-    } else {
-      // Handle partial or failed responses
-      let errorMsg = "An error occurred while generating the QR code.";
-      if (qrData.network_status !== 0) {
-        errorMsg =
-          qrData.error_message || "Transaction failed. Please try again.";
-      }
-      res.render("netsQrFail", {
-        title: "Error",
-        user: req.session?.user,
-        responseCode: qrData.response_code || "N.A.",
-        instructions: qrData.instruction || "",
-        errorMsg: errorMsg,
-      });
     }
+
+    // Handle partial or failed responses
+    let errorMsg = "An error occurred while generating the QR code.";
+    if (qrData.network_status !== 0) {
+      errorMsg = qrData.error_message || "Transaction failed. Please try again.";
+    }
+    res.render("netsQrFail", {
+      title: "Error",
+      user: req.session?.user,
+      responseCode: qrData.response_code || "N.A.",
+      instructions: qrData.instruction || "",
+      errorMsg: errorMsg,
+    });
   } catch (error) {
     console.error("Error in generateQrCode:", error.message);
     res.render("netsQrFail", {
