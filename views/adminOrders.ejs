@@ -35,19 +35,22 @@
       <h2 class="fw-bold mb-1">All orders</h2>
       <p class="mb-0">Review shopper purchases, update statuses, and open invoices.</p>
     </div>
-    <form class="row g-2 align-items-center" method="GET" action="/admin/orders">
-      <div class="col-auto">
-        <input type="text" name="q" class="form-control" placeholder="Filter by username or email" value="<%= search || '' %>">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-light text-dark">Filter</button>
-      </div>
-      <% if (search) { %>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <a href="/admin/refunds" class="btn btn-outline-light">Refund requests</a>
+      <form class="row g-2 align-items-center" method="GET" action="/admin/orders">
         <div class="col-auto">
-          <a href="/admin/orders" class="btn btn-outline-light">Clear</a>
+          <input type="text" name="q" class="form-control" placeholder="Filter by username or email" value="<%= search || '' %>">
         </div>
-      <% } %>
-    </form>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-light text-dark">Filter</button>
+        </div>
+        <% if (search) { %>
+          <div class="col-auto">
+            <a href="/admin/orders" class="btn btn-outline-light">Clear</a>
+          </div>
+        <% } %>
+      </form>
+    </div>
   </div>
 
   <% if (messages && messages.error && messages.error.length) { %>

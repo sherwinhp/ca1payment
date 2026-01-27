@@ -9,6 +9,7 @@ const createPaymentController = require('./controllers/paymentController');
 const createProductController = require('./controllers/productController');
 const createReviewController = require('./controllers/reviewController');
 const createAdminController = require('./controllers/adminController');
+const createRefundController = require('./controllers/refundController');
 const createModels = require('./models/Supermarket');
 const createMiddleware = require('./middleware');
 const createUserController = require('./controllers/userController');
@@ -35,6 +36,26 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+const refundStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/uploads/refunds');
+    },
+    filename: (req, file, cb) => {
+        const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        cb(null, safeName);
+    }
+});
+
+const refundUpload = multer({
+    storage: refundStorage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype && file.mimetype.startsWith('image/')) {
+            return cb(null, true);
+        }
+        cb(null, false);
+    }
+});
 
 const models = createModels(connection);
 
@@ -92,6 +113,7 @@ const adminController = createAdminController({
     primaryAdminEmail: PRIMARY_ADMIN_EMAIL
 });
 
+const refundController = createRefundController({ connection });
 const {
     sessionMiddleware,
     checkAuthenticated,
@@ -149,6 +171,8 @@ app.get('/payments/nets/fail', requireShopper, paymentController.renderNetsFailu
 app.get('/checkout/success/:orderId', requireShopper, cartController.renderOrderSuccess);
 app.get('/orders', requireShopper, cartController.renderOrderHistory);
 app.get('/orders/:id/invoice', requireShopper, cartController.renderInvoice);
+app.get('/orders/:id/refund', requireShopper, refundController.renderRefundForm);
+app.post('/orders/:id/refund', requireShopper, refundUpload.single('refundImage'), refundController.submitRefundRequest);
 app.get('/logout', authController.logout);
 
 app.get('/product/:id', productController.renderProductDetails);
@@ -172,6 +196,9 @@ app.post('/admin/users/:id/delete', checkAuthenticated, checkAdmin, adminControl
 app.get('/admin/orders', checkAuthenticated, checkAdmin, adminController.renderAllOrders);
 app.post('/admin/orders/:id/status', checkAuthenticated, checkAdmin, adminController.updateOrderStatus);
 app.get('/admin/orders/:id/invoice', checkAuthenticated, checkAdmin, adminController.renderInvoice);
+app.get('/admin/refunds', checkAuthenticated, checkAdmin, adminController.renderRefundRequests);
+app.post('/admin/refunds/:id/approve', checkAuthenticated, checkAdmin, adminController.approveRefund);
+app.post('/admin/refunds/:id/deny', checkAuthenticated, checkAdmin, adminController.denyRefund);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port http://localhost:${PORT}`));

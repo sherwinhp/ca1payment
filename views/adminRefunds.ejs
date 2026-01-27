@@ -1,0 +1,107 @@
+<%
+  const refundsStyles = `
+    body { background: #0f172a; color: #e2e8f0; }
+    .refunds-card { border: none; border-radius: 16px; background: rgba(30, 41, 59, 0.7); }
+    .refunds-card .table { color: #e2e8f0; }
+    .refunds-card .table td, .refunds-card .table th { border-color: rgba(148, 163, 184, 0.25); }
+    .badge-status { text-transform: uppercase; letter-spacing: 0.08em; }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Refund Requests', user, bodyClass: 'bg-dark', customStyles: refundsStyles }) %>
+
+<div class="container py-5">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <p class="text-uppercase small mb-1" style="letter-spacing: 0.2rem;">Admin dashboard</p>
+      <h2 class="fw-bold mb-0">Refund requests</h2>
+      <p class="text-muted small mb-0">Approve or deny customer refund submissions.</p>
+    </div>
+    <a href="/admin/orders" class="btn btn-outline-light">Back to orders</a>
+  </div>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger refunds-card mb-3">
+      <% messages.error.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success refunds-card mb-3">
+      <% messages.success.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <div class="card refunds-card">
+    <div class="card-body">
+      <% if (!refunds.length) { %>
+        <div class="alert alert-info mb-0">No refund requests right now.</div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-dark align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>User</th>
+                <th>Reason</th>
+                <th>Image</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% refunds.forEach(function(refund) { %>
+                <tr>
+                  <td>
+                    <a href="/admin/orders/<%= refund.order_id %>/invoice" class="text-decoration-none text-light">#<%= refund.order_id %></a><br>
+                    <small class="text-muted">$<%= Number(refund.total_amount).toFixed(2) %> · <%= refund.payment_method %></small>
+                  </td>
+                  <td>
+                    <div><%= refund.username %></div>
+                    <small class="text-muted"><%= refund.email %></small>
+                  </td>
+                  <td>
+                    <div><%= refund.reason_text || 'No description provided.' %></div>
+                    <% if (refund.admin_note) { %>
+                      <small class="text-info d-block mt-1">Admin note: <%= refund.admin_note %></small>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (refund.image_path) { %>
+                      <a href="<%= refund.image_path %>" target="_blank" class="btn btn-sm btn-outline-light">View</a>
+                    <% } else { %>
+                      <span class="text-muted">None</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% const statusClass = refund.status === 'approved' ? 'bg-success' : refund.status === 'denied' ? 'bg-danger' : 'bg-warning text-dark'; %>
+                    <span class="badge <%= statusClass %> badge-status"><%= refund.status %></span>
+                  </td>
+                  <td>
+                    <% if (refund.status === 'pending') { %>
+                      <form action="/admin/refunds/<%= refund.id %>/approve" method="POST" class="d-grid gap-2">
+                        <input type="text" name="adminNote" class="form-control form-control-sm" placeholder="Admin note (optional)">
+                        <button type="submit" class="btn btn-sm btn-success">Approve</button>
+                      </form>
+                      <form action="/admin/refunds/<%= refund.id %>/deny" method="POST" class="d-grid gap-2 mt-2">
+                        <input type="text" name="adminNote" class="form-control form-control-sm" placeholder="Admin note (optional)">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Deny</button>
+                      </form>
+                    <% } else { %>
+                      <span class="text-muted small">No actions</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/quickNav', { user, backToHref: '/admin/orders', backToLabel: 'Back to orders' }) %>
+<%- include('partials/footer') %>

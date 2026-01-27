@@ -113,8 +113,34 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
         });
     };
 
+    const ensureOrderPaymentReference = () => {
+        const columnCheckSQL = `
+            SELECT COUNT(*) AS hasColumn
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'orders'
+              AND COLUMN_NAME = 'payment_reference'
+        `;
+
+        connection.query(columnCheckSQL, (checkErr, rows = []) => {
+            if (checkErr) {
+                return console.error('Unable to verify payment_reference column:', checkErr);
+            }
+            const exists = rows[0] && rows[0].hasColumn;
+            if (!exists) {
+                connection.query('ALTER TABLE orders ADD COLUMN payment_reference VARCHAR(255) NULL', (alterErr) => {
+                    if (alterErr) {
+                        console.error('Unable to add payment_reference column:', alterErr);
+                    } else {
+                        console.log('Added payment_reference to orders');
+                    }
+                });
+            }
+        });
+    };
+
     const normalizeOrderStatuses = () => {
-        connection.query("UPDATE orders SET status = 'pending' WHERE status = 'placed'", (err) => {
+        connection.query("UPDATE orders SET status = 'pending' WHERE status = 'placed' OR status IS NULL", (err) => {
             if (err) {
                 console.error('Unable to normalize order statuses:', err);
             }
@@ -128,6 +154,7 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                 user_id INT NOT NULL,
                 total_amount DECIMAL(10,2) NOT NULL,
                 payment_method VARCHAR(50) NOT NULL,
+                payment_reference VARCHAR(255) NULL,
                 status VARCHAR(50) NOT NULL DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -158,7 +185,29 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                 if (itemsErr) {
                     console.error('Unable to prepare order items table:', itemsErr);
                 } else {
+                    const createRefundsTableSQL = `
+                        CREATE TABLE IF NOT EXISTS refund_requests (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            order_id INT NOT NULL,
+                            user_id INT NOT NULL,
+                            reason_text TEXT NULL,
+                            image_path VARCHAR(255) NULL,
+                            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                            admin_note TEXT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                            UNIQUE KEY unique_refund_order (order_id),
+                            CONSTRAINT fk_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_refunds_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        )
+                    `;
+                    connection.query(createRefundsTableSQL, (refundErr) => {
+                        if (refundErr) {
+                            console.error('Unable to prepare refunds table:', refundErr);
+                        }
+                    });
                     ensureOrderItemSnapshots();
+                    ensureOrderPaymentReference();
                     normalizeOrderStatuses();
                 }
             });

@@ -1,18 +1,194 @@
-<%- include('partials/header', { pageTitle: 'Order Successful', user }) %>
+<%- include('partials/header', { 
+  pageTitle: 'Order Successful', 
+  user,
+  bodyClass: 'order-success-page',
+  extraHead: `
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  `,
+  customStyles: `
+    :root {
+      --success-ink: #0f172a;
+      --success-muted: #475569;
+      --success-accent: #1d4ed8;
+      --success-accent-soft: #dbeafe;
+      --success-card: #ffffff;
+      --success-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    body.order-success-page {
+      font-family: "Work Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 55%),
+        linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      color: var(--success-ink);
+    }
+    .order-success-wrap {
+      min-height: calc(100vh - 140px);
+      display: flex;
+      align-items: center;
+    }
+    .order-success-card {
+      border: 0;
+      border-radius: 22px;
+      box-shadow: var(--success-shadow);
+      background: var(--success-card);
+    }
+    .success-title {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .success-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      background: linear-gradient(140deg, #22c55e 0%, #16a34a 100%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 12px 30px rgba(34, 197, 94, 0.25);
+    }
+    .success-divider {
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+    }
+    .success-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--success-accent-soft);
+      color: var(--success-accent);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .payment-card {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 16px 18px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .payment-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 0.02em;
+    }
+    .brand-visa {
+      background: #e0f2fe;
+      color: #0c4a6e;
+    }
+    .brand-mastercard {
+      background: #fff1f2;
+      color: #7f1d1d;
+    }
+    .amount-text {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    .action-btn {
+      border-radius: 14px;
+      font-weight: 600;
+      padding: 12px 16px;
+    }
+  `
+}) %>
 
-<div class="container py-5 text-center">
-  <div class="card shadow-sm mx-auto" style="max-width: 540px;">
-    <div class="card-body">
-      <div class="display-6 mb-3">Success</div>
-      <h3 class="card-title mb-3">Order placed successfully</h3>
-      <p class="mb-2">Order ID: <strong>#<%= order.id %></strong></p>
-      <p class="mb-2">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></p>
-      <p class="mb-2">Payment method: <strong class="text-capitalize"><%= order.payment_method %></strong></p>
-      <p class="mb-4">Total paid: <strong>$<%= Number(order.total_amount).toFixed(2) %></strong></p>
-      <div class="d-grid gap-2">
-        <a href="/orders" class="btn btn-primary">View order history</a>
-        <a href="/orders/<%= order.id %>/invoice" class="btn btn-outline-secondary">View / print invoice</a>
-        <a href="/shopping" class="btn btn-outline-dark">Continue shopping</a>
+<%
+  const paymentMethod = String(order.payment_method || '').toLowerCase();
+  const paymentRef = String(order.payment_reference || '').toLowerCase();
+  const isCard = paymentMethod === 'card';
+  let cardBrand = '';
+  if (isCard) {
+    if (paymentRef === 'visa') {
+      cardBrand = 'visa';
+    } else if (paymentRef === 'mastercard') {
+      cardBrand = 'mastercard';
+    }
+  }
+  let paidLabel = 'Payment confirmed';
+  if (isCard && cardBrand === 'visa') {
+    paidLabel = 'Paid by Visa card';
+  } else if (isCard && cardBrand === 'mastercard') {
+    paidLabel = 'Paid by Mastercard';
+  } else if (paymentMethod === 'paypal') {
+    paidLabel = 'Paid by PayPal';
+  } else if (paymentMethod === 'nets') {
+    paidLabel = 'Paid by NETS QR';
+  } else if (paymentMethod) {
+    paidLabel = `Paid by ${paymentMethod}`;
+  }
+%>
+
+<div class="container order-success-wrap py-5">
+  <div class="order-success-card mx-auto w-100" style="max-width: 720px;">
+    <div class="card-body p-4 p-md-5">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+        <div class="d-flex align-items-center gap-3">
+          <div class="success-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-uppercase small fw-semibold text-muted">Success</div>
+            <h2 class="success-title mb-0">Order placed successfully</h2>
+          </div>
+        </div>
+        <span class="success-pill text-uppercase"><%= order.status %></span>
+      </div>
+
+      <div class="row g-3 align-items-stretch mb-4">
+        <div class="col-md-6">
+          <div class="payment-card h-100">
+            <div class="text-muted small">Order ID</div>
+            <div class="fw-semibold fs-5">#<%= order.id %></div>
+            <div class="text-muted small mt-3">Payment</div>
+            <div class="fw-semibold"><%= paidLabel %></div>
+            <% if (cardBrand === 'visa') { %>
+              <div class="payment-brand brand-visa mt-2">
+                <svg width="28" height="18" viewBox="0 0 64 40" fill="none" aria-hidden="true">
+                  <rect width="64" height="40" rx="8" fill="#0ea5e9"></rect>
+                  <text x="12" y="26" fill="white" font-size="16" font-family="Space Grotesk, sans-serif" font-weight="700">VISA</text>
+                </svg>
+                <span>Visa</span>
+              </div>
+            <% } else if (cardBrand === 'mastercard') { %>
+              <div class="payment-brand brand-mastercard mt-2">
+                <svg width="34" height="18" viewBox="0 0 64 40" fill="none" aria-hidden="true">
+                  <circle cx="24" cy="20" r="12" fill="#f97316"></circle>
+                  <circle cx="40" cy="20" r="12" fill="#ef4444"></circle>
+                </svg>
+                <span>Mastercard</span>
+              </div>
+            <% } %>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="payment-card h-100 d-flex flex-column justify-content-between">
+            <div>
+              <div class="text-muted small">Total paid</div>
+              <div class="amount-text">$<%= Number(order.total_amount).toFixed(2) %></div>
+            </div>
+            <div class="text-muted small mt-3">
+              Thanks for shopping with us. Your receipt is ready whenever you need it.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="success-divider mb-4"></div>
+
+      <div class="d-grid gap-2 d-md-flex">
+        <a href="/orders" class="btn btn-primary action-btn flex-fill">View order history</a>
+        <a href="/orders/<%= order.id %>/invoice" class="btn btn-outline-secondary action-btn flex-fill">View / print invoice</a>
+        <a href="/shopping" class="btn btn-outline-dark action-btn flex-fill">Continue shopping</a>
       </div>
     </div>
   </div>

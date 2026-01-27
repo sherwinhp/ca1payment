@@ -1,5 +1,51 @@
 const createCartController = ({ connection }) => {
     const PAYMENT_METHODS = ['card', 'paypal', 'nets'];
+    const normalizeCardNumber = (value) => String(value || '').replace(/\D/g, '');
+    const isValidCardNumber = (value) => {
+        const digits = normalizeCardNumber(value);
+        if (digits.length < 13 || digits.length > 19) {
+            return false;
+        }
+        let sum = 0;
+        let shouldDouble = false;
+        for (let i = digits.length - 1; i >= 0; i -= 1) {
+            let digit = Number(digits[i]);
+            if (Number.isNaN(digit)) return false;
+            if (shouldDouble) {
+                digit *= 2;
+                if (digit > 9) digit -= 9;
+            }
+            sum += digit;
+            shouldDouble = !shouldDouble;
+        }
+        return sum % 10 === 0;
+    };
+    const isValidExpiry = (value) => {
+        const match = String(value || '').trim().match(/^(\d{2})\s*\/\s*(\d{2}|\d{4})$/);
+        if (!match) return false;
+        const month = Number(match[1]);
+        if (month < 1 || month > 12) return false;
+        let year = Number(match[2]);
+        if (year < 100) year += 2000;
+        const lastDay = new Date(year, month, 0);
+        const now = new Date();
+        return lastDay >= new Date(now.getFullYear(), now.getMonth(), 1);
+    };
+    const isValidCvv = (value) => /^\d{3,4}$/.test(String(value || '').trim());
+    const getCardBrand = (value) => {
+        const digits = normalizeCardNumber(value);
+        if (!digits) return null;
+        if (digits.startsWith('4')) {
+            return 'visa';
+        }
+        const firstTwo = Number(digits.slice(0, 2));
+        const firstFour = Number(digits.slice(0, 4));
+        if ((firstTwo >= 51 && firstTwo <= 55) || (firstFour >= 2221 && firstFour <= 2720)) {
+            return 'mastercard';
+        }
+        return null;
+    };
+
     const checkoutCartSQL = `
             SELECT
                 ci.product_id AS productId,
@@ -25,7 +71,7 @@ const createCartController = ({ connection }) => {
             });
         });
 
-    const createOrderFromCart = (userId, paymentMethod) =>
+    const createOrderFromCart = (userId, paymentMethod, status = 'pending', paymentReference = null) =>
         new Promise((resolve, reject) => {
             connection.query(checkoutCartSQL, [userId], (cartErr, items = []) => {
                 if (cartErr) {
@@ -76,13 +122,13 @@ const createCartController = ({ connection }) => {
                     }
 
                     const insertOrderSQL = `
-                        INSERT INTO orders (user_id, total_amount, payment_method, status)
-                        VALUES (?, ?, ?, 'pending')
+                        INSERT INTO orders (user_id, total_amount, payment_method, status, payment_reference)
+                        VALUES (?, ?, ?, ?, ?)
                     `;
 
                     connection.query(
                         insertOrderSQL,
-                        [userId, totalAmount.toFixed(2), paymentMethod],
+                        [userId, totalAmount.toFixed(2), paymentMethod, status, paymentReference],
                         (orderErr, orderResult) => {
                             if (orderErr) {
                                 return connection.rollback(() =>
@@ -388,7 +434,32 @@ const createCartController = ({ connection }) => {
         const userId = req.session.user.id;
         const paymentMethod = PAYMENT_METHODS.includes(req.body.paymentMethod) ? req.body.paymentMethod : PAYMENT_METHODS[0];
 
-        createOrderFromCart(userId, paymentMethod)
+        if (paymentMethod === 'card') {
+            const cardErrors = [];
+            const cardName = String(req.body.cardName || '').trim();
+            if (cardName.length < 2) {
+                cardErrors.push('Cardholder name looks invalid.');
+            }
+            if (!isValidCardNumber(req.body.cardNumber)) {
+                cardErrors.push('Card number failed validation.');
+            }
+            if (!isValidExpiry(req.body.expiry)) {
+                cardErrors.push('Card expiry is invalid or expired.');
+            }
+            if (!isValidCvv(req.body.cvv)) {
+                cardErrors.push('CVV is invalid.');
+            }
+
+            if (cardErrors.length) {
+                cardErrors.forEach((message) => req.flash('error', message));
+                return res.redirect('/checkout');
+            }
+        }
+
+        const initialStatus = paymentMethod === 'card' ? 'paid' : 'pending';
+        const paymentReference =
+            paymentMethod === 'card' ? getCardBrand(req.body.cardNumber) : null;
+        createOrderFromCart(userId, paymentMethod, initialStatus, paymentReference)
             .then((orderId) => {
                 res.redirect(`/checkout/success/${orderId}`);
             })
@@ -403,7 +474,7 @@ const createCartController = ({ connection }) => {
         const userId = req.session.user.id;
         const orderId = parseInt(req.params.orderId, 10);
         const orderSQL = `
-            SELECT id, total_amount, payment_method, status, created_at
+            SELECT id, total_amount, payment_method, status, created_at, payment_reference
             FROM orders
             WHERE id = ? AND user_id = ?
         `;
@@ -424,10 +495,20 @@ const createCartController = ({ connection }) => {
     const renderOrderHistory = (req, res) => {
         const userId = req.session.user.id;
         const ordersSQL = `
-            SELECT id, total_amount, payment_method, status, created_at
-            FROM orders
-            WHERE user_id = ?
-            ORDER BY created_at DESC
+            SELECT
+                o.id,
+                o.total_amount,
+                o.payment_method,
+                o.payment_reference,
+                o.status,
+                o.created_at,
+                rr.id AS refund_id,
+                rr.status AS refund_status,
+                rr.admin_note AS refund_admin_note
+            FROM orders o
+            LEFT JOIN refund_requests rr ON rr.order_id = o.id
+            WHERE o.user_id = ?
+            ORDER BY o.created_at DESC
         `;
 
         connection.query(ordersSQL, [userId], (ordersErr, orders = []) => {
@@ -516,7 +597,7 @@ const createCartController = ({ connection }) => {
         const userId = req.session.user.id;
         const orderId = parseInt(req.params.id, 10);
         const orderSQL = `
-            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at,
+            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at, o.payment_reference,
                    u.username, u.email, u.address, u.contact
             FROM orders o
             INNER JOIN users u ON u.id = o.user_id

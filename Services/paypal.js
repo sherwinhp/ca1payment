@@ -67,4 +67,30 @@ async function captureOrder(orderId) {
   return data;
 }
 
-module.exports = { createOrder, captureOrder };
+async function refundCapture(captureId, amount) {
+  const accessToken = await getAccessToken();
+  const body = amount
+    ? {
+        amount: {
+          currency_code: 'SGD',
+          value: String(amount)
+        }
+      }
+    : undefined;
+  const response = await fetch(`${PAYPAL_API}/v2/payments/captures/${captureId}/refund`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await response.json();
+  console.log('PayPal refundCapture response:', data);
+  if (!response.ok) {
+    throw new Error(data?.message || data?.name || 'Unable to refund PayPal capture.');
+  }
+  return data;
+}
+
+module.exports = { createOrder, captureOrder, refundCapture };

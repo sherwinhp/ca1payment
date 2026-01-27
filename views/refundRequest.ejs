@@ -1,0 +1,81 @@
+<%
+  const refundStyles = `
+    body {
+      background: radial-gradient(circle at 15% 20%, #fee2e2 0, transparent 30%),
+                  radial-gradient(circle at 85% 20%, #e0f2fe 0, transparent 30%),
+                  #f8fafc;
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    }
+    .refund-card {
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+    }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Request Refund', user, bodyClass: 'bg-light', customStyles: refundStyles }) %>
+
+<div class="container py-5">
+  <div class="mb-4">
+    <p class="text-uppercase small text-danger fw-semibold mb-1">Refund request</p>
+    <h2 class="fw-bold mb-1">Order #<%= order.id %></h2>
+    <p class="text-muted small mb-0">Submit a reason and optional image for review by admin.</p>
+  </div>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger rounded-3">
+      <% messages.error.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success rounded-3">
+      <% messages.success.forEach(function(msg) { %>
+        <div><%= msg %></div>
+      <% }); %>
+    </div>
+  <% } %>
+
+  <div class="card refund-card">
+    <div class="card-body">
+      <div class="mb-3">
+        <div class="text-muted">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></div>
+        <div class="text-muted">Payment method: <span class="text-capitalize"><%= order.payment_method %></span></div>
+        <div class="text-muted">Total: $<%= Number(order.total_amount).toFixed(2) %></div>
+      </div>
+
+      <% if (order.refund_id) { %>
+        <div class="alert alert-info mb-0">
+          A refund request is already <strong><%= order.refund_status %></strong> for this order.
+          <% if (order.refund_status === 'denied' && order.refund_admin_note) { %>
+            <div class="mt-2 text-muted">Admin feedback: <%= order.refund_admin_note %></div>
+          <% } %>
+        </div>
+      <% } else if (!canRequest) { %>
+        <div class="alert alert-warning mb-0">
+          Refund requests are only available for paid orders.
+        </div>
+      <% } else { %>
+        <form action="/orders/<%= order.id %>/refund" method="POST" enctype="multipart/form-data" class="row g-3">
+          <div class="col-12">
+            <label for="reason" class="form-label">Reason for refund</label>
+            <textarea class="form-control" id="reason" name="reason" rows="4" placeholder="Briefly describe the issue..."></textarea>
+            <div class="form-text">You can submit a reason, an image, or both.</div>
+          </div>
+          <div class="col-12">
+            <label for="refundImage" class="form-label">Upload image (optional)</label>
+            <input type="file" class="form-control" id="refundImage" name="refundImage" accept="image/*">
+          </div>
+          <div class="col-12 d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-danger">Submit refund request</button>
+            <a href="/orders" class="btn btn-outline-secondary">Back to orders</a>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/quickNav', { user, backToHref: '/orders', backToLabel: 'Back to orders' }) %>
+<%- include('partials/footer') %>

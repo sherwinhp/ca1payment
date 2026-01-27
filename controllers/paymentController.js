@@ -42,7 +42,8 @@ const createPaymentController = ({ connection, getCartForCheckout, createOrderFr
                 return res.status(400).json({ error: 'PayPal payment was not completed.' });
             }
 
-            const dbOrderId = await createOrderFromCart(req.session.user.id, 'paypal');
+            const captureId = capture?.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
+            const dbOrderId = await createOrderFromCart(req.session.user.id, 'paypal', 'paid', captureId);
             res.json({ redirectUrl: `/orders/${dbOrderId}/invoice` });
         } catch (error) {
             console.error('Unable to capture PayPal order:', error);
@@ -76,7 +77,8 @@ const createPaymentController = ({ connection, getCartForCheckout, createOrderFr
             return res.redirect('/payments/nets/fail?reason=not_completed');
         }
 
-        createOrderFromCart(req.session.user.id, 'nets')
+        const paymentReference = netsPayment?.txnRetrievalRef || null;
+        createOrderFromCart(req.session.user.id, 'nets', 'paid', paymentReference)
             .then((orderId) => {
                 req.session.netsPayment = null;
                 res.redirect(`/orders/${orderId}/invoice`);
@@ -92,9 +94,11 @@ const createPaymentController = ({ connection, getCartForCheckout, createOrderFr
         const reason = req.query.reason || '';
         let errorMsg = 'NETS payment was not completed.';
         if (reason === 'timeout') {
-            errorMsg = 'NETS payment timed out. Please try again.';
+            errorMsg = 'NETS payment timed out. Your cart is unchanged.';
         } else if (reason === 'error') {
-            errorMsg = 'Unable to verify NETS payment. Please try again.';
+            errorMsg = 'Unable to verify NETS payment. Your cart is unchanged.';
+        } else if (reason === 'cancelled') {
+            errorMsg = 'NETS payment was cancelled. Your cart is unchanged.';
         }
 
         req.session.netsPayment = null;

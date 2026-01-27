@@ -1,5 +1,7 @@
+const paypalService = require('../Services/paypal');
+
 const createAdminController = ({ connection, primaryAdminEmail }) => {
-    const ORDER_STATUSES = ['pending', 'delivering', 'delivered'];
+    const ORDER_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
 
     const renderUserManagement = (req, res) => {
         const listUsersSQL = `
@@ -302,7 +304,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
     const renderInvoice = (req, res) => {
         const orderId = parseInt(req.params.id, 10);
         const orderSQL = `
-            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at,
+            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at, o.payment_reference,
                    u.username, u.email, u.address, u.contact
             FROM orders o
             INNER JOIN users u ON u.id = o.user_id
@@ -348,6 +350,163 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         });
     };
 
+    const renderRefundRequests = (req, res) => {
+        const refundsSQL = `
+            SELECT
+                rr.id,
+                rr.order_id,
+                rr.user_id,
+                rr.reason_text,
+                rr.image_path,
+                rr.status,
+                rr.admin_note,
+                rr.created_at,
+                o.total_amount,
+                o.payment_method,
+                u.username,
+                u.email
+            FROM refund_requests rr
+            INNER JOIN orders o ON o.id = rr.order_id
+            INNER JOIN users u ON u.id = rr.user_id
+            ORDER BY rr.created_at DESC
+        `;
+
+        connection.query(refundsSQL, (refundErr, refunds = []) => {
+            if (refundErr) {
+                console.error('Unable to load refund requests:', refundErr);
+                req.flash('error', 'Unable to load refund requests right now.');
+                return res.render('adminRefunds', {
+                    user: req.session.user,
+                    refunds: [],
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            }
+
+            res.render('adminRefunds', {
+                user: req.session.user,
+                refunds,
+                messages: { success: req.flash('success'), error: req.flash('error') }
+            });
+        });
+    };
+
+    const approveRefund = (req, res) => {
+        const refundId = parseInt(req.params.id, 10);
+        const adminNote = (req.body.adminNote || '').trim();
+
+        if (!Number.isInteger(refundId)) {
+            req.flash('error', 'Invalid refund request selected.');
+            return res.redirect('/admin/refunds');
+        }
+
+        connection.query(
+            'SELECT id, order_id, status FROM refund_requests WHERE id = ?',
+            [refundId],
+            (lookupErr, rows = []) => {
+                if (lookupErr || !rows.length) {
+                    if (lookupErr) {
+                        console.error('Unable to find refund request:', lookupErr);
+                    }
+                    req.flash('error', 'Refund request not found.');
+                    return res.redirect('/admin/refunds');
+                }
+
+                const refund = rows[0];
+                if (refund.status !== 'pending') {
+                    req.flash('error', 'Refund request is already processed.');
+                    return res.redirect('/admin/refunds');
+                }
+
+                const orderLookupSQL = `
+                    SELECT id, total_amount, payment_method, payment_reference
+                    FROM orders
+                    WHERE id = ?
+                `;
+
+                connection.query(orderLookupSQL, [refund.order_id], async (orderErr, orderRows = []) => {
+                    if (orderErr || !orderRows.length) {
+                        if (orderErr) {
+                            console.error('Unable to load order for refund:', orderErr);
+                        }
+                        req.flash('error', 'Order not found for refund.');
+                        return res.redirect('/admin/refunds');
+                    }
+
+                    const order = orderRows[0];
+                    if (order.payment_method === 'paypal') {
+                        if (!order.payment_reference) {
+                            req.flash('error', 'Missing PayPal capture ID for this order.');
+                            return res.redirect('/admin/refunds');
+                        }
+                        try {
+                            await paypalService.refundCapture(order.payment_reference, order.total_amount);
+                        } catch (apiErr) {
+                            console.error('PayPal refund failed:', apiErr);
+                            req.flash('error', apiErr.message || 'PayPal refund failed.');
+                            return res.redirect('/admin/refunds');
+                        }
+                    }
+
+                    const updateRefundSQL = `
+                        UPDATE refund_requests
+                        SET status = 'approved', admin_note = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    `;
+
+                    connection.query(updateRefundSQL, [adminNote || null, refundId], (updateErr) => {
+                        if (updateErr) {
+                            console.error('Unable to approve refund request:', updateErr);
+                            req.flash('error', 'Unable to approve refund request right now.');
+                            return res.redirect('/admin/refunds');
+                        }
+
+                        connection.query(
+                            'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                            ['refunded', refund.order_id],
+                            (finalizeErr) => {
+                                if (finalizeErr) {
+                                    console.error('Unable to update order status for refund:', finalizeErr);
+                                    req.flash('error', 'Refund approved but order status failed to update.');
+                                } else {
+                                    req.flash('success', `Refund approved for order #${refund.order_id}.`);
+                                }
+                                res.redirect('/admin/refunds');
+                            }
+                        );
+                    });
+                });
+            }
+        );
+    };
+
+    const denyRefund = (req, res) => {
+        const refundId = parseInt(req.params.id, 10);
+        const adminNote = (req.body.adminNote || '').trim();
+
+        if (!Number.isInteger(refundId)) {
+            req.flash('error', 'Invalid refund request selected.');
+            return res.redirect('/admin/refunds');
+        }
+
+        const updateRefundSQL = `
+            UPDATE refund_requests
+            SET status = 'denied', admin_note = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status = 'pending'
+        `;
+
+        connection.query(updateRefundSQL, [adminNote || null, refundId], (updateErr, result) => {
+            if (updateErr) {
+                console.error('Unable to deny refund request:', updateErr);
+                req.flash('error', 'Unable to deny refund request right now.');
+            } else if (!result.affectedRows) {
+                req.flash('error', 'Refund request is already processed or not found.');
+            } else {
+                req.flash('success', 'Refund request denied.');
+            }
+            res.redirect('/admin/refunds');
+        });
+    };
+
     return {
         renderUserManagement,
         renderAllOrders,
@@ -356,7 +515,10 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         demoteUser,
         createUser,
         deleteUser,
-        renderInvoice
+        renderInvoice,
+        renderRefundRequests,
+        approveRefund,
+        denyRefund
     };
 };
 

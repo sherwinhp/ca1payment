@@ -32,6 +32,9 @@
 
           <div class="d-grid gap-2">
             <a href="/checkout" class="btn btn-outline-secondary">Back to checkout</a>
+            <a href="/payments/nets/fail?reason=cancelled&txn_retrieval_ref=<%= encodeURIComponent(txnRetrievalRef || '') %>" class="btn btn-outline-danger">
+              Cancel payment
+            </a>
           </div>
         </div>
       </div>
