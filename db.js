@@ -139,6 +139,28 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
         });
     };
 
+    const ensurePaymentEventsInfrastructure = () => {
+        const createPaymentEventsSQL = `
+            CREATE TABLE IF NOT EXISTS payment_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NULL,
+                provider VARCHAR(50) NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                status VARCHAR(50) NOT NULL,
+                message TEXT NULL,
+                payload JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_payment_events_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+            )
+        `;
+
+        connection.query(createPaymentEventsSQL, (tableErr) => {
+            if (tableErr) {
+                console.error('Unable to prepare payment_events table:', tableErr);
+            }
+        });
+    };
+
     const normalizeOrderStatuses = () => {
         connection.query("UPDATE orders SET status = 'pending' WHERE status = 'placed' OR status IS NULL", (err) => {
             if (err) {
@@ -192,13 +214,21 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                             user_id INT NOT NULL,
                             reason_text TEXT NULL,
                             image_path VARCHAR(255) NULL,
+                            requested_amount DECIMAL(10,2) NULL,
+                            approved_amount DECIMAL(10,2) NULL,
                             status VARCHAR(20) NOT NULL DEFAULT 'pending',
                             admin_note TEXT NULL,
+                            approved_by INT NULL,
+                            denied_by INT NULL,
+                            approved_at TIMESTAMP NULL,
+                            denied_at TIMESTAMP NULL,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                             UNIQUE KEY unique_refund_order (order_id),
                             CONSTRAINT fk_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-                            CONSTRAINT fk_refunds_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                            CONSTRAINT fk_refunds_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_refunds_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
+                            CONSTRAINT fk_refunds_denied_by FOREIGN KEY (denied_by) REFERENCES users(id) ON DELETE SET NULL
                         )
                     `;
                     connection.query(createRefundsTableSQL, (refundErr) => {
@@ -206,6 +236,42 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
                             console.error('Unable to prepare refunds table:', refundErr);
                         }
                     });
+                    const ensureRefundAmountColumns = () => {
+                        const columns = [
+                            { name: 'requested_amount', ddl: 'ALTER TABLE refund_requests ADD COLUMN requested_amount DECIMAL(10,2) NULL' },
+                            { name: 'approved_amount', ddl: 'ALTER TABLE refund_requests ADD COLUMN approved_amount DECIMAL(10,2) NULL' },
+                            { name: 'approved_by', ddl: 'ALTER TABLE refund_requests ADD COLUMN approved_by INT NULL' },
+                            { name: 'denied_by', ddl: 'ALTER TABLE refund_requests ADD COLUMN denied_by INT NULL' },
+                            { name: 'approved_at', ddl: 'ALTER TABLE refund_requests ADD COLUMN approved_at TIMESTAMP NULL' },
+                            { name: 'denied_at', ddl: 'ALTER TABLE refund_requests ADD COLUMN denied_at TIMESTAMP NULL' }
+                        ];
+
+                        columns.forEach((col) => {
+                            const sql = `
+                                SELECT COUNT(*) AS hasColumn
+                                FROM INFORMATION_SCHEMA.COLUMNS
+                                WHERE TABLE_SCHEMA = DATABASE()
+                                  AND TABLE_NAME = 'refund_requests'
+                                  AND COLUMN_NAME = ?
+                            `;
+                            connection.query(sql, [col.name], (checkErr, rows = []) => {
+                                if (checkErr) {
+                                    return console.error(`Unable to check ${col.name} column:`, checkErr);
+                                }
+                                const exists = rows[0] && rows[0].hasColumn;
+                                if (!exists) {
+                                    connection.query(col.ddl, (alterErr) => {
+                                        if (alterErr) {
+                                            console.error(`Unable to add ${col.name} to refund_requests:`, alterErr);
+                                        } else {
+                                            console.log(`Added ${col.name} to refund_requests`);
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                    };
+                    ensureRefundAmountColumns();
                     ensureOrderItemSnapshots();
                     ensureOrderPaymentReference();
                     normalizeOrderStatuses();
@@ -413,6 +479,7 @@ const initializeDatabase = ({ primaryAdminEmail, primaryAdminPassword, primaryAd
     ensureReviewInfrastructure();
     ensureCartInfrastructure();
     ensureOrderInfrastructure();
+    ensurePaymentEventsInfrastructure();
     ensureProductStatusColumn(() => {
         ensureProductCategoryColumn(() => {
             ensureProductDeleteFlag(() => {

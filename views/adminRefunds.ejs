@@ -10,13 +10,24 @@
 <%- include('partials/header', { pageTitle: 'Refund Requests', user, bodyClass: 'bg-dark', customStyles: refundsStyles }) %>
 
 <div class="container py-5">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
     <div>
       <p class="text-uppercase small mb-1" style="letter-spacing: 0.2rem;">Admin dashboard</p>
       <h2 class="fw-bold mb-0">Refund requests</h2>
       <p class="text-muted small mb-0">Approve or deny customer refund submissions.</p>
     </div>
     <a href="/admin/orders" class="btn btn-outline-light">Back to orders</a>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <% const activePercent = typeof filterPercent === 'number' ? filterPercent : null; %>
+    <% const isActive = (value) => activePercent === value; %>
+    <a href="/admin/refunds" class="btn btn-sm <%= activePercent === null ? 'btn-light' : 'btn-outline-light' %>">All</a>
+    <a href="/admin/refunds/full" class="btn btn-sm <%= isActive(1) ? 'btn-light' : 'btn-outline-light' %>">Full (100%)</a>
+    <a href="/admin/refunds/70" class="btn btn-sm <%= isActive(0.7) ? 'btn-light' : 'btn-outline-light' %>">70%</a>
+    <a href="/admin/refunds/50" class="btn btn-sm <%= isActive(0.5) ? 'btn-light' : 'btn-outline-light' %>">50%</a>
+    <a href="/admin/refunds/25" class="btn btn-sm <%= isActive(0.25) ? 'btn-light' : 'btn-outline-light' %>">25%</a>
+    <a href="/admin/refunds/other" class="btn btn-sm <%= filterOther ? 'btn-light' : 'btn-outline-light' %>">Others</a>
   </div>
 
   <% if (messages && messages.error && messages.error.length) { %>
@@ -36,6 +47,12 @@
 
   <div class="card refunds-card">
     <div class="card-body">
+      <div class="alert alert-info refunds-card mb-3">
+        <div class="fw-semibold mb-1">Refund reason guide (auto-calculated presets)</div>
+        <div class="small text-muted">
+          Wrong item delivered = 100% · Delivery arrived late = 50% · Item damaged = 70% · Missing items = 25% · Others = custom amount
+        </div>
+      </div>
       <% if (!refunds.length) { %>
         <div class="alert alert-info mb-0">No refund requests right now.</div>
       <% } else { %>
@@ -46,6 +63,8 @@
                 <th>Order</th>
                 <th>User</th>
                 <th>Reason</th>
+                <th>Requested</th>
+                <th>Approved</th>
                 <th>Image</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -67,6 +86,18 @@
                     <% if (refund.admin_note) { %>
                       <small class="text-info d-block mt-1">Admin note: <%= refund.admin_note %></small>
                     <% } %>
+                    <% if (refund.status === 'approved' && refund.approved_by_name) { %>
+                      <small class="text-muted d-block mt-1">Approved by: <%= refund.approved_by_name %> (<%= refund.approved_by_email %>)</small>
+                    <% } %>
+                    <% if (refund.status === 'denied' && refund.denied_by_name) { %>
+                      <small class="text-muted d-block mt-1">Denied by: <%= refund.denied_by_name %> (<%= refund.denied_by_email %>)</small>
+                    <% } %>
+                  </td>
+                  <td>
+                    $<%= Number(refund.requested_amount || refund.total_amount).toFixed(2) %>
+                  </td>
+                  <td>
+                    <%= refund.approved_amount ? '$' + Number(refund.approved_amount).toFixed(2) : '-' %>
                   </td>
                   <td>
                     <% if (refund.image_path) { %>
@@ -82,6 +113,7 @@
                   <td>
                     <% if (refund.status === 'pending') { %>
                       <form action="/admin/refunds/<%= refund.id %>/approve" method="POST" class="d-grid gap-2">
+                        <input type="number" name="approvedAmount" class="form-control form-control-sm" step="0.01" min="0.01" max="<%= Number(refund.requested_amount || refund.total_amount).toFixed(2) %>" placeholder="Approve amount (optional)">
                         <input type="text" name="adminNote" class="form-control form-control-sm" placeholder="Admin note (optional)">
                         <button type="submit" class="btn btn-sm btn-success">Approve</button>
                       </form>

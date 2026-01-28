@@ -1,3 +1,5 @@
+const stripeService = require('../Services/stripe');
+
 const createCartController = ({ connection }) => {
     const PAYMENT_METHODS = ['card', 'paypal', 'nets'];
     const normalizeCardNumber = (value) => String(value || '').replace(/\D/g, '');
@@ -44,6 +46,19 @@ const createCartController = ({ connection }) => {
             return 'mastercard';
         }
         return null;
+    };
+
+    const logPaymentEvent = ({ orderId = null, provider, eventType, status, message = null, payload = null }) => {
+        const sql = `
+            INSERT INTO payment_events (order_id, provider, event_type, status, message, payload)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        const safePayload = payload ? JSON.stringify(payload) : null;
+        connection.query(sql, [orderId, provider, eventType, status, message, safePayload], (error) => {
+            if (error) {
+                console.error('Unable to log payment event:', error);
+            }
+        });
     };
 
     const checkoutCartSQL = `
@@ -417,6 +432,7 @@ const createCartController = ({ connection }) => {
                     paymentMethods: PAYMENT_METHODS,
                     selectedMethod: PAYMENT_METHODS[0],
                     paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
+                    stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
                     messages: {
                         error: req.flash('error'),
                         success: req.flash('success')
@@ -437,31 +453,94 @@ const createCartController = ({ connection }) => {
         if (paymentMethod === 'card') {
             const cardErrors = [];
             const cardName = String(req.body.cardName || '').trim();
+            const paymentMethodId = String(req.body.paymentMethodId || '').trim();
             if (cardName.length < 2) {
                 cardErrors.push('Cardholder name looks invalid.');
             }
-            if (!isValidCardNumber(req.body.cardNumber)) {
-                cardErrors.push('Card number failed validation.');
-            }
-            if (!isValidExpiry(req.body.expiry)) {
-                cardErrors.push('Card expiry is invalid or expired.');
-            }
-            if (!isValidCvv(req.body.cvv)) {
-                cardErrors.push('CVV is invalid.');
+            if (!paymentMethodId) {
+                cardErrors.push('Payment method could not be created.');
             }
 
             if (cardErrors.length) {
-                cardErrors.forEach((message) => req.flash('error', message));
-                return res.redirect('/checkout');
+                const message = encodeURIComponent(cardErrors[0]);
+                return res.redirect(`/checkout/failure?method=card&reason=error&message=${message}`);
             }
         }
 
-        const initialStatus = paymentMethod === 'card' ? 'paid' : 'pending';
-        const paymentReference =
-            paymentMethod === 'card' ? getCardBrand(req.body.cardNumber) : null;
-        createOrderFromCart(userId, paymentMethod, initialStatus, paymentReference)
+        if (paymentMethod === 'card') {
+            const paymentMethodId = String(req.body.paymentMethodId || '').trim();
+
+            let riskLevel = 'unknown';
+            return getCartForCheckout(userId)
+                .then((items) => {
+                    if (!items.length) {
+                        throw new Error('Your cart is empty.');
+                    }
+                    if (!paymentMethodId) {
+                        throw new Error('Payment method is missing.');
+                    }
+                    const total = items.reduce(
+                        (acc, item) => acc + Number(item.price) * Number(item.quantity || 0),
+                        0
+                    );
+                    return stripeService.createPaymentIntent({
+                        amount: total,
+                        currency: 'sgd',
+                        paymentMethodId,
+                        description: `SupermarketAppMVC order for user ${userId}`,
+                        metadata: { userId: String(userId) }
+                    });
+                })
+                .then((intent) => {
+                    if (intent.status !== 'succeeded') {
+                        throw new Error(`Stripe payment status: ${intent.status}`);
+                    }
+                    const charge = intent.charges?.data?.[0];
+                    const cardBrand = charge?.payment_method_details?.card?.brand || 'card';
+                    const chargeId = charge?.id || intent.id;
+                    const paymentReference = `${cardBrand}:${chargeId}`;
+                    const outcome = charge?.outcome || null;
+                    riskLevel = outcome?.risk_level || 'unknown';
+                    const nextStatus = 'paid';
+
+                    return createOrderFromCart(userId, paymentMethod, nextStatus, paymentReference)
+                        .then((orderId) => {
+                            if (outcome) {
+                                logPaymentEvent({
+                                    orderId,
+                                    provider: 'card',
+                                    eventType: 'card.risk',
+                                    status: riskLevel,
+                                    message: outcome.seller_message || 'Card risk assessment',
+                                    payload: outcome
+                                });
+                            }
+                            return orderId;
+                        });
+                })
+                .then((orderId) => {
+                    if (orderId) {
+                        logPaymentEvent({
+                            orderId,
+                            provider: 'card',
+                            eventType: 'card.paid',
+                            status: 'paid',
+                            message: 'Stripe card payment completed.'
+                        });
+                    }
+                    res.redirect(`/checkout/loading?orderId=${orderId}&method=card`);
+                })
+                .catch((error) => {
+                    console.error('Unable to place card order:', error);
+                    const message = encodeURIComponent(error.message || 'Card payment failed.');
+                    res.redirect(`/checkout/failure?method=card&reason=error&message=${message}`);
+                });
+        }
+
+        const initialStatus = 'pending';
+        createOrderFromCart(userId, paymentMethod, initialStatus, null)
             .then((orderId) => {
-                res.redirect(`/checkout/success/${orderId}`);
+                res.redirect(`/checkout/loading?orderId=${orderId}&method=${paymentMethod}`);
             })
             .catch((error) => {
                 console.error('Unable to place order:', error);
@@ -504,7 +583,9 @@ const createCartController = ({ connection }) => {
                 o.created_at,
                 rr.id AS refund_id,
                 rr.status AS refund_status,
-                rr.admin_note AS refund_admin_note
+                rr.admin_note AS refund_admin_note,
+                rr.requested_amount,
+                rr.approved_amount
             FROM orders o
             LEFT JOIN refund_requests rr ON rr.order_id = o.id
             WHERE o.user_id = ?

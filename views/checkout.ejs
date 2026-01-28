@@ -1,7 +1,137 @@
 <%- include('partials/header', { pageTitle: 'Checkout', user }) %>
 
+<style>
+  .checkout-hero {
+    background: radial-gradient(circle at top left, rgba(25, 118, 210, 0.15), transparent 55%),
+                radial-gradient(circle at top right, rgba(0, 172, 193, 0.18), transparent 45%),
+                #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .summary-card,
+  .payment-card {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+  .payment-card {
+    background: #ffffff;
+  }
+  .payment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .payment-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+  }
+  .paypal-logo {
+    background: #eef5ff;
+    color: #003087;
+    border: 1px solid rgba(0, 48, 135, 0.2);
+  }
+  .nets-logo {
+    background: #fef3c7;
+    color: #14532d;
+    border: 1px solid rgba(20, 83, 45, 0.2);
+  }
+  .card-logo {
+    background: #f3f4f6;
+    color: #0f172a;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+  }
+  .logo-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: currentColor;
+    display: inline-block;
+  }
+  .payment-note {
+    color: #475569;
+  }
+  .trust-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .trust-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px dashed rgba(15, 23, 42, 0.15);
+    font-size: 0.8rem;
+    color: #475569;
+  }
+  .summary-item {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .summary-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #f8fafc;
+  }
+  .summary-meta {
+    line-height: 1.2;
+  }
+  .back-link {
+    white-space: nowrap;
+  }
+  .auto-pay-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
+  .stripe-card-field {
+    padding: 14px 12px;
+    min-height: 54px;
+  }
+  .stripe-card-field.StripeElement--focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+  .stripe-card-field.StripeElement--invalid {
+    border-color: #dc3545;
+  }
+  .stripe-card-label {
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: block;
+  }
+</style>
+
 <div class="container py-5">
-  <h2 class="mb-4">Checkout</h2>
+  <div class="checkout-hero rounded-4 p-4 mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
+      <div>
+        <h2 class="mb-1">Checkout</h2>
+        <p class="mb-0 text-muted">Review your order and choose a payment option.</p>
+      </div>
+      <div class="trust-row">
+        <span class="trust-badge"><span class="logo-dot"></span>Secure checkout</span>
+        <span class="trust-badge"><span class="logo-dot"></span>Instant confirmation</span>
+        <span class="trust-badge"><span class="logo-dot"></span>Local payments</span>
+        <a href="/cart" class="btn btn-outline-secondary btn-sm back-link">Back to cart</a>
+      </div>
+    </div>
+  </div>
 
   <% if (messages && messages.error && messages.error.length) { %>
     <div class="alert alert-danger rounded-3">
@@ -20,17 +150,25 @@
 
   <div class="row g-4">
     <div class="col-lg-7">
-      <div class="card shadow-sm">
+      <div class="card shadow-sm summary-card rounded-4">
         <div class="card-body">
           <h5 class="card-title">Order summary</h5>
           <ul class="list-group list-group-flush">
             <% cart.forEach(function(item) { %>
               <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                  <div class="fw-semibold"><%= item.productName %></div>
-                  <small class="text-muted">Qty: <%= item.quantity %> x $<%= Number(item.price).toFixed(2) %></small>
+                <div class="summary-item w-100">
+                  <img
+                    src="<%= item.image ? '/images/' + item.image : '/images/noImage.png' %>"
+                    alt="<%= item.productName %>"
+                    class="summary-thumb"
+                    loading="lazy"
+                  >
+                  <div class="summary-meta">
+                    <div class="fw-semibold"><%= item.productName %></div>
+                    <small class="text-muted">Qty: <%= item.quantity %> x $<%= Number(item.price).toFixed(2) %></small>
+                  </div>
+                  <div class="fw-bold">$<%= (item.quantity * item.price).toFixed(2) %></div>
                 </div>
-                <div class="fw-bold">$<%= (item.quantity * item.price).toFixed(2) %></div>
               </li>
             <% }); %>
             <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -42,57 +180,68 @@
       </div>
     </div>
     <div class="col-lg-5">
-      <div class="card shadow-sm">
+      <div class="card shadow-sm payment-card rounded-4" id="paypal-section">
         <div class="card-body">
-          <h5 class="card-title">Pay with PayPal (Sandbox)</h5>
+          <div class="payment-header mb-3">
+            <h5 class="card-title mb-0">Pay with PayPal</h5>
+            <span class="payment-logo paypal-logo">
+              <span class="logo-dot"></span>
+              PayPal
+            </span>
+          </div>
           <% if (paypalClientId) { %>
             <div id="paypal-button-container" class="mb-3"></div>
-            <p class="small text-muted mb-0">Use your sandbox PayPal account to complete payment.</p>
+            <p class="small payment-note mb-0">Fast checkout using your PayPal account.</p>
           <% } else { %>
             <div class="alert alert-warning">PayPal is not configured. Add PAYPAL_CLIENT_ID to enable.</div>
           <% } %>
         </div>
       </div>
 
-      <div class="card shadow-sm mt-4">
+      <div class="card shadow-sm payment-card rounded-4 mt-4" id="nets-section">
         <div class="card-body d-grid gap-3">
-          <h5 class="card-title">Pay with NETS QR (Sandbox)</h5>
-          <p class="small text-muted mb-1">We will generate a sandbox NETS QR for the cart total.</p>
-          <form action="/payments/nets" method="POST" class="d-grid gap-2">
-            <button type="submit" class="btn btn-danger">Generate NETS QR</button>
+          <div class="payment-header">
+            <h5 class="card-title mb-0">Pay with NETS QR</h5>
+            <span class="payment-logo nets-logo">
+              <span class="logo-dot"></span>
+              NETS
+            </span>
+          </div>
+          <p class="small payment-note mb-1">Generate a NETS QR code for the cart total.</p>
+          <form action="/payments/nets" method="POST" class="d-grid gap-2" id="nets-pay-form">
+            <button type="submit" class="btn btn-success">Generate NETS QR</button>
+            <div class="auto-pay-status text-success d-none" id="nets-auto-spinner">
+              <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+              Starting NETS QR payment...
+            </div>
           </form>
         </div>
       </div>
 
-      <div class="card shadow-sm mt-4">
+      <div class="card shadow-sm payment-card rounded-4 mt-4" id="card-section">
         <div class="card-body">
-          <h5 class="card-title">Pay with Credit/Debit Card</h5>
+          <div class="payment-header mb-3">
+            <h5 class="card-title mb-0">Pay with Credit/Debit Card</h5>
+            <span class="payment-logo card-logo">
+              <span class="logo-dot"></span>
+              Cards
+            </span>
+          </div>
           <form action="/checkout" method="POST" class="d-grid gap-2">
             <input type="hidden" name="paymentMethod" value="card">
+            <input type="hidden" name="paymentMethodId" id="paymentMethodId">
             <div class="form-floating">
               <input type="text" class="form-control" id="cardName" name="cardName" placeholder="Cardholder name" required>
               <label for="cardName">Cardholder name</label>
+              <div class="invalid-feedback">Please enter the cardholder name.</div>
             </div>
-            <div class="form-floating">
-              <input type="text" class="form-control" id="cardNumber" name="cardNumber" placeholder="0000 0000 0000 0000" maxlength="23" required inputmode="numeric" autocomplete="cc-number">
-              <label for="cardNumber">Card number</label>
-            </div>
-            <div class="row g-2">
-              <div class="col-6">
-                <div class="form-floating">
-                  <input type="text" class="form-control" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required inputmode="numeric" autocomplete="cc-exp">
-                  <label for="expiry">Expiry (MM/YY)</label>
-                </div>
-              </div>
-              <div class="col-6">
-                <div class="form-floating">
-                  <input type="text" class="form-control" id="cvv" name="cvv" placeholder="123" maxlength="4" required inputmode="numeric" autocomplete="cc-csc">
-                  <label for="cvv">CVV</label>
-                </div>
-              </div>
+            <div>
+              <label class="stripe-card-label" for="stripe-card-element">Card details</label>
+              <div id="stripe-card-element" class="form-control stripe-card-field"></div>
+              <div class="invalid-feedback">Please enter valid card details.</div>
             </div>
             <button type="submit" class="btn btn-primary">Pay $<%= total %></button>
-            <a href="/cart" class="btn btn-outline-secondary">Back to cart</a>
+            <div class="text-danger small d-none" id="cardPaymentError"></div>
           </form>
         </div>
       </div>
@@ -124,7 +273,7 @@
               return data.id;
             })
             .catch(() => {
-              alert('Unable to start PayPal checkout right now.');
+              window.location.href = '/checkout/failure?method=paypal&reason=error';
             });
         },
         onApprove: (data) => {
@@ -135,19 +284,134 @@
           })
             .then((res) => res.json().then((result) => ({ ok: res.ok, result })))
             .then(({ ok, result }) => {
-              if (ok && result && result.redirectUrl) {
+              if (result && result.redirectUrl) {
                 window.location.href = result.redirectUrl;
+                return;
+              }
+              if (!ok) {
+                window.location.href = '/checkout/failure?method=paypal&reason=error';
                 return;
               }
               alert(result?.error || 'Unable to finalize PayPal payment.');
             })
             .catch(() => {
-              alert('Unable to finalize PayPal payment.');
+              window.location.href = '/checkout/failure?method=paypal&reason=error';
             });
         },
-        onError: () => alert('Unable to process PayPal payment. Please try again.'),
-        onCancel: () => window.location.reload()
+        onError: () => window.location.href = '/checkout/failure?method=paypal&reason=error',
+        onCancel: () => window.location.href = '/checkout/failure?method=paypal&reason=cancelled'
       }).render('#paypal-button-container');
     })();
   </script>
 <% } %>
+
+<% if (stripePublishableKey) { %>
+  <script src="https://js.stripe.com/v3/"></script>
+  <script>
+    window.__stripePublishableKey = "<%= stripePublishableKey %>";
+  </script>
+<% } %>
+
+<script>
+  (function autoPayHelper() {
+    const params = new URLSearchParams(window.location.search);
+    const method = (params.get('autoPay') || '').toLowerCase();
+    if (!method) return;
+
+    const focusSection = (id) => {
+      const section = document.getElementById(id);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    if (method === 'nets') {
+      focusSection('nets-section');
+      const form = document.getElementById('nets-pay-form');
+      const spinner = document.getElementById('nets-auto-spinner');
+      if (form) {
+        const btn = form.querySelector('button[type="submit"]');
+        if (spinner) spinner.classList.remove('d-none');
+        if (btn) btn.disabled = true;
+        setTimeout(() => form.submit(), 700);
+      }
+    } else if (method === 'paypal') {
+      focusSection('paypal-section');
+    } else if (method === 'card') {
+      focusSection('card-section');
+      const input = document.getElementById('cardName');
+      if (input) {
+        setTimeout(() => input.focus(), 400);
+      }
+    }
+  })();
+</script>
+
+<script>
+  (function cardInputHelpers() {
+    const cardForm = document.querySelector('#card-section form');
+    if (!cardForm) return;
+    const cardName = document.getElementById('cardName');
+    const errorEl = document.getElementById('cardPaymentError');
+    const paymentMethodInput = document.getElementById('paymentMethodId');
+    const stripeKey = window.__stripePublishableKey;
+
+    const showError = (message) => {
+      if (!errorEl) return;
+      errorEl.textContent = message;
+      errorEl.classList.remove('d-none');
+    };
+    const clearError = () => {
+      if (!errorEl) return;
+      errorEl.textContent = '';
+      errorEl.classList.add('d-none');
+    };
+
+    if (!stripeKey || !window.Stripe) {
+      showError('Stripe is not configured. Please try again later.');
+      return;
+    }
+
+    const stripe = Stripe(stripeKey);
+    const elements = stripe.elements();
+    const card = elements.create('card', {
+      hidePostalCode: true,
+      style: {
+        base: {
+          fontSize: '16px',
+          color: '#0f172a',
+          '::placeholder': { color: '#94a3b8' }
+        }
+      }
+    });
+    card.mount('#stripe-card-element');
+
+    cardForm.addEventListener('submit', (event) => {
+      clearError();
+      const hasErrors = !cardName.value.trim();
+
+      if (hasErrors) {
+        event.preventDefault();
+        showError('Please enter the cardholder name.');
+        return;
+      }
+
+      if (!paymentMethodInput || !paymentMethodInput.value) {
+        event.preventDefault();
+        stripe.createPaymentMethod({
+          type: 'card',
+          card: card,
+          billing_details: { name: cardName.value.trim() }
+        }).then((result) => {
+          if (result.error) {
+            showError(result.error.message || 'Unable to process card details.');
+            return;
+          }
+          paymentMethodInput.value = result.paymentMethod.id;
+          cardForm.submit();
+        });
+      }
+
+    });
+  })();
+</script>

@@ -25,9 +25,11 @@ exports.generateQrCode = async (req, res) => {
 
     if (!response.ok || !responseData?.result?.data) {
       console.error("NETS API error:", response.status, responseData);
-      return res.render("netsQrFail", {
-        title: "Error",
+      return res.render("paymentFail", {
+        title: "Payment Unsuccessful",
         user: req.session?.user,
+        method: "nets",
+        reason: "error",
         responseCode: responseData?.code || responseData?.result?.code || response.status || "N.A.",
         instructions: responseData?.message || responseData?.result?.message || "",
         errorMsg: "Unable to generate NETS QR. Check API credentials and request payload."
@@ -92,18 +94,22 @@ exports.generateQrCode = async (req, res) => {
     if (qrData.network_status !== 0) {
       errorMsg = qrData.error_message || "Transaction failed. Please try again.";
     }
-    return res.render("netsQrFail", {
-      title: "Error",
+    return res.render("paymentFail", {
+      title: "Payment Unsuccessful",
       user: req.session?.user,
+      method: "nets",
+      reason: "error",
       responseCode: qrData.response_code || "N.A.",
       instructions: qrData.instruction || "",
       errorMsg: errorMsg,
     });
   } catch (error) {
     console.error("Error in generateQrCode:", error.message);
-    return res.render("netsQrFail", {
-      title: "Error",
+    return res.render("paymentFail", {
+      title: "Payment Unsuccessful",
       user: req.session?.user,
+      method: "nets",
+      reason: "error",
       responseCode: "N.A.",
       instructions: "",
       errorMsg: "Unable to generate NETS QR at the moment. Please try again."

@@ -1,7 +1,21 @@
 const paypalService = require('../Services/paypal');
+const stripeService = require('../Services/stripe');
 
 const createAdminController = ({ connection, primaryAdminEmail }) => {
-    const ORDER_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
+    const ORDER_STATUSES = ['pending', 'paid', 'failed', 'refunded', 'partially_refunded'];
+
+    const logPaymentEvent = ({ orderId = null, provider, eventType, status, message = null, payload = null }) => {
+        const sql = `
+            INSERT INTO payment_events (order_id, provider, event_type, status, message, payload)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        const safePayload = payload ? JSON.stringify(payload) : null;
+        connection.query(sql, [orderId, provider, eventType, status, message, safePayload], (error) => {
+            if (error) {
+                console.error('Unable to log payment event:', error);
+            }
+        });
+    };
 
     const renderUserManagement = (req, res) => {
         const listUsersSQL = `
@@ -35,9 +49,11 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         const params = [];
         let ordersSQL = `
             SELECT o.id, o.user_id, o.total_amount, o.payment_method, o.status, o.created_at,
-                   u.username, u.email, u.role
+                   u.username, u.email, u.role,
+                   rr.approved_amount AS refund_approved_amount
             FROM orders o
             INNER JOIN users u ON u.id = o.user_id
+            LEFT JOIN refund_requests rr ON rr.order_id = o.id
         `;
 
         if (search) {
@@ -47,7 +63,32 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
 
         ordersSQL += ' ORDER BY o.created_at DESC';
 
-        connection.query(ordersSQL, params, (ordersErr, orders = []) => {
+        const statsSQL = `
+            SELECT
+                COUNT(*) AS totalOrders,
+                SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paidOrders,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pendingOrders,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failedOrders,
+                SUM(CASE WHEN status IN ('refunded','partially_refunded') THEN 1 ELSE 0 END) AS refundedOrders,
+                SUM(CASE WHEN status = 'paid' THEN total_amount ELSE 0 END) AS totalRevenue
+            FROM orders
+        `;
+
+        connection.query(statsSQL, (statsErr, statsRows = []) => {
+            const stats = statsRows[0] || {
+                totalOrders: 0,
+                paidOrders: 0,
+                pendingOrders: 0,
+                failedOrders: 0,
+                refundedOrders: 0,
+                totalRevenue: 0
+            };
+
+            if (statsErr) {
+                console.error('Unable to load order stats:', statsErr);
+            }
+
+            connection.query(ordersSQL, params, (ordersErr, orders = []) => {
             if (ordersErr) {
                 console.error('Unable to load all orders:', ordersErr);
                 req.flash('error', 'Unable to load orders right now.');
@@ -57,6 +98,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     orderItems: {},
                     statuses: ORDER_STATUSES,
                     search,
+                    stats,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             }
@@ -68,6 +110,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     orderItems: {},
                     statuses: ORDER_STATUSES,
                     search,
+                    stats,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             }
@@ -107,37 +150,17 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     orderItems: grouped,
                     statuses: ORDER_STATUSES,
                     search,
+                    stats,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             });
         });
+        });
     };
 
     const updateOrderStatus = (req, res) => {
-        const orderId = parseInt(req.params.id, 10);
-        const status = req.body.status;
-
-        if (!ORDER_STATUSES.includes(status)) {
-            req.flash('error', 'Invalid status selected.');
-            return res.redirect('/admin/orders');
-        }
-
-        connection.query(
-            'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [status, orderId],
-            (error, result) => {
-                if (error) {
-                    console.error('Unable to update order status:', error);
-                    req.flash('error', 'Unable to update order status right now.');
-                } else if (!result.affectedRows) {
-                    req.flash('error', 'Order not found.');
-                } else {
-                    req.flash('success', `Order #${orderId} marked as ${status}.`);
-                }
-
-                res.redirect('/admin/orders');
-            }
-        );
+        req.flash('error', 'Order status is auto-updated by the payment flow.');
+        return res.redirect('/admin/orders');
     };
 
     const promoteUser = (req, res) => {
@@ -351,33 +374,74 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
     };
 
     const renderRefundRequests = (req, res) => {
+        const rawPercent = String(req.params.percent || req.query.percent || '').trim();
+        const percent = rawPercent ? Number(rawPercent) : null;
+        const allowedPercents = [1, 0.7, 0.5, 0.25];
+        const hasFilter = Number.isFinite(percent) && allowedPercents.includes(percent);
+        const isOtherFilter = rawPercent === 'other';
+        const refundsParams = [];
+        let filterClause = '';
+
+        if (hasFilter) {
+            filterClause = `
+            WHERE rr.requested_amount IS NOT NULL
+              AND o.total_amount IS NOT NULL
+              AND ABS(rr.requested_amount - (o.total_amount * ?)) <= 0.01
+            `;
+            refundsParams.push(percent);
+        } else if (isOtherFilter) {
+            filterClause = `
+            WHERE rr.requested_amount IS NOT NULL
+              AND o.total_amount IS NOT NULL
+              AND ABS(rr.requested_amount - (o.total_amount * 1)) > 0.01
+              AND ABS(rr.requested_amount - (o.total_amount * 0.7)) > 0.01
+              AND ABS(rr.requested_amount - (o.total_amount * 0.5)) > 0.01
+              AND ABS(rr.requested_amount - (o.total_amount * 0.25)) > 0.01
+            `;
+        }
+
         const refundsSQL = `
-            SELECT
-                rr.id,
-                rr.order_id,
-                rr.user_id,
-                rr.reason_text,
-                rr.image_path,
-                rr.status,
-                rr.admin_note,
-                rr.created_at,
+              SELECT
+                  rr.id,
+                  rr.order_id,
+                  rr.user_id,
+                  rr.reason_text,
+                  rr.image_path,
+                  rr.requested_amount,
+                  rr.approved_amount,
+                  rr.status,
+                  rr.admin_note,
+                  rr.approved_by,
+                  rr.denied_by,
+                  rr.approved_at,
+                  rr.denied_at,
+                  rr.created_at,
                 o.total_amount,
                 o.payment_method,
                 u.username,
-                u.email
+                u.email,
+                au.username AS approved_by_name,
+                au.email AS approved_by_email,
+                du.username AS denied_by_name,
+                du.email AS denied_by_email
             FROM refund_requests rr
             INNER JOIN orders o ON o.id = rr.order_id
             INNER JOIN users u ON u.id = rr.user_id
+            LEFT JOIN users au ON au.id = rr.approved_by
+            LEFT JOIN users du ON du.id = rr.denied_by
+            ${filterClause}
             ORDER BY rr.created_at DESC
         `;
 
-        connection.query(refundsSQL, (refundErr, refunds = []) => {
+        connection.query(refundsSQL, refundsParams, (refundErr, refunds = []) => {
             if (refundErr) {
                 console.error('Unable to load refund requests:', refundErr);
                 req.flash('error', 'Unable to load refund requests right now.');
                 return res.render('adminRefunds', {
                     user: req.session.user,
                     refunds: [],
+                    filterPercent: hasFilter ? percent : null,
+                    filterOther: isOtherFilter,
                     messages: { success: req.flash('success'), error: req.flash('error') }
                 });
             }
@@ -385,6 +449,8 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
             res.render('adminRefunds', {
                 user: req.session.user,
                 refunds,
+                filterPercent: hasFilter ? percent : null,
+                filterOther: isOtherFilter,
                 messages: { success: req.flash('success'), error: req.flash('error') }
             });
         });
@@ -393,6 +459,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
     const approveRefund = (req, res) => {
         const refundId = parseInt(req.params.id, 10);
         const adminNote = (req.body.adminNote || '').trim();
+        const approvedAmountRaw = (req.body.approvedAmount || '').trim();
 
         if (!Number.isInteger(refundId)) {
             req.flash('error', 'Invalid refund request selected.');
@@ -400,7 +467,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         }
 
         connection.query(
-            'SELECT id, order_id, status FROM refund_requests WHERE id = ?',
+            'SELECT id, order_id, status, requested_amount FROM refund_requests WHERE id = ?',
             [refundId],
             (lookupErr, rows = []) => {
                 if (lookupErr || !rows.length) {
@@ -433,42 +500,91 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                     }
 
                     const order = orderRows[0];
+                    const orderTotal = Number(order.total_amount) || 0;
+                    const requestedAmount = Number(refund.requested_amount) || orderTotal;
+                    let approvedAmount = requestedAmount;
+
+                    if (approvedAmountRaw) {
+                        const parsed = Number(approvedAmountRaw);
+                        if (!Number.isFinite(parsed) || parsed <= 0) {
+                            req.flash('error', 'Approved amount must be a valid number.');
+                            return res.redirect('/admin/refunds');
+                        }
+                        if (parsed > requestedAmount) {
+                            req.flash('error', 'Approved amount cannot exceed requested amount.');
+                            return res.redirect('/admin/refunds');
+                        }
+                        approvedAmount = parsed;
+                    }
                     if (order.payment_method === 'paypal') {
                         if (!order.payment_reference) {
                             req.flash('error', 'Missing PayPal capture ID for this order.');
                             return res.redirect('/admin/refunds');
                         }
                         try {
-                            await paypalService.refundCapture(order.payment_reference, order.total_amount);
+                            await paypalService.refundCapture(order.payment_reference, approvedAmount);
                         } catch (apiErr) {
                             console.error('PayPal refund failed:', apiErr);
                             req.flash('error', apiErr.message || 'PayPal refund failed.');
+                            return res.redirect('/admin/refunds');
+                        }
+                    } else if (order.payment_method === 'card') {
+                        const ref = String(order.payment_reference || '');
+                        const chargeId = ref.includes(':') ? ref.split(':')[1] : ref;
+                        if (!chargeId) {
+                            req.flash('error', 'Missing Stripe charge ID for this order.');
+                            return res.redirect('/admin/refunds');
+                        }
+                        try {
+                            await stripeService.refundCharge({ chargeId, amount: approvedAmount });
+                        } catch (apiErr) {
+                            console.error('Stripe refund failed:', apiErr);
+                            req.flash('error', apiErr.message || 'Stripe refund failed.');
                             return res.redirect('/admin/refunds');
                         }
                     }
 
                     const updateRefundSQL = `
                         UPDATE refund_requests
-                        SET status = 'approved', admin_note = ?, updated_at = CURRENT_TIMESTAMP
+                        SET status = 'approved',
+                            admin_note = ?,
+                            approved_amount = ?,
+                            approved_by = ?,
+                            approved_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     `;
 
-                    connection.query(updateRefundSQL, [adminNote || null, refundId], (updateErr) => {
+                    connection.query(
+                        updateRefundSQL,
+                        [adminNote || null, approvedAmount, req.session.user.id, refundId],
+                        (updateErr) => {
                         if (updateErr) {
                             console.error('Unable to approve refund request:', updateErr);
                             req.flash('error', 'Unable to approve refund request right now.');
                             return res.redirect('/admin/refunds');
                         }
 
+                        const nextStatus = approvedAmount < orderTotal ? 'partially_refunded' : 'refunded';
                         connection.query(
                             'UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                            ['refunded', refund.order_id],
+                            [nextStatus, refund.order_id],
                             (finalizeErr) => {
                                 if (finalizeErr) {
                                     console.error('Unable to update order status for refund:', finalizeErr);
                                     req.flash('error', 'Refund approved but order status failed to update.');
                                 } else {
-                                    req.flash('success', `Refund approved for order #${refund.order_id}.`);
+                                    logPaymentEvent({
+                                        orderId: refund.order_id,
+                                        provider: order.payment_method || 'refund',
+                                        eventType: 'refund.approved',
+                                        status: nextStatus,
+                                        message: adminNote || `Refund approved: $${approvedAmount.toFixed(2)}`
+                                    });
+                                    req.flash(
+                                        'success',
+                                        `Refund approved for order #${refund.order_id} (${nextStatus.replace('_', ' ')}).`
+                                    );
                                 }
                                 res.redirect('/admin/refunds');
                             }
@@ -490,11 +606,15 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
 
         const updateRefundSQL = `
             UPDATE refund_requests
-            SET status = 'denied', admin_note = ?, updated_at = CURRENT_TIMESTAMP
+            SET status = 'denied',
+                admin_note = ?,
+                denied_by = ?,
+                denied_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND status = 'pending'
         `;
 
-        connection.query(updateRefundSQL, [adminNote || null, refundId], (updateErr, result) => {
+        connection.query(updateRefundSQL, [adminNote || null, req.session.user.id, refundId], (updateErr, result) => {
             if (updateErr) {
                 console.error('Unable to deny refund request:', updateErr);
                 req.flash('error', 'Unable to deny refund request right now.');
@@ -505,6 +625,117 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
             }
             res.redirect('/admin/refunds');
         });
+    };
+
+
+    const renderPaymentEvents = (req, res) => {
+        const search = String(req.query.q || '').trim();
+        const provider = String(req.query.provider || '').trim();
+        const status = String(req.query.status || '').trim();
+        const eventType = String(req.query.type || '').trim();
+
+        const where = [];
+        const params = [];
+
+        if (search) {
+            where.push(
+                `(CAST(pe.order_id AS CHAR) LIKE ? OR u.username LIKE ? OR u.email LIKE ? OR pe.event_type LIKE ? OR pe.message LIKE ?)`
+            );
+            const like = `%${search}%`;
+            params.push(like, like, like, like, like);
+        }
+        if (provider) {
+            where.push('pe.provider = ?');
+            params.push(provider);
+        }
+        if (status) {
+            where.push('pe.status = ?');
+            params.push(status);
+        }
+        if (eventType) {
+            where.push('pe.event_type = ?');
+            params.push(eventType);
+        }
+
+        const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+        const eventsSQL = `
+            SELECT
+                pe.id,
+                pe.order_id,
+                pe.provider,
+                pe.event_type,
+                pe.status,
+                pe.message,
+                pe.created_at,
+                o.total_amount,
+                o.payment_method,
+                u.username,
+                u.email
+            FROM payment_events pe
+            LEFT JOIN orders o ON o.id = pe.order_id
+            LEFT JOIN users u ON u.id = o.user_id
+            ${whereClause}
+            ORDER BY pe.created_at DESC
+            LIMIT 200
+        `;
+
+        const distinctProvidersSQL = 'SELECT DISTINCT provider FROM payment_events ORDER BY provider ASC';
+        const distinctStatusesSQL = 'SELECT DISTINCT status FROM payment_events ORDER BY status ASC';
+        const distinctTypesSQL = 'SELECT DISTINCT event_type FROM payment_events ORDER BY event_type ASC';
+
+        const loadDistinct = (sql) =>
+            new Promise((resolve) => {
+                connection.query(sql, (err, rows = []) => {
+                    if (err) return resolve([]);
+                    resolve(rows.map((row) => Object.values(row)[0]).filter(Boolean));
+                });
+            });
+
+        Promise.all([
+            new Promise((resolve) => {
+                connection.query(eventsSQL, params, (error, events = []) => {
+                    if (error) return resolve({ error, events: [] });
+                    resolve({ error: null, events });
+                });
+            }),
+            loadDistinct(distinctProvidersSQL),
+            loadDistinct(distinctStatusesSQL),
+            loadDistinct(distinctTypesSQL)
+        ])
+            .then(([eventsResult, providers, statuses, types]) => {
+                if (eventsResult.error) {
+                    console.error('Unable to load payment events:', eventsResult.error);
+                    req.flash('error', 'Unable to load payment logs right now.');
+                }
+
+                res.render('adminPaymentEvents', {
+                    user: req.session.user,
+                    events: eventsResult.events,
+                    providers,
+                    statuses,
+                    types,
+                    filters: {
+                        search,
+                        provider,
+                        status,
+                        type: eventType
+                    },
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            })
+            .catch((error) => {
+                console.error('Unable to load payment events:', error);
+                req.flash('error', 'Unable to load payment logs right now.');
+                res.render('adminPaymentEvents', {
+                    user: req.session.user,
+                    events: [],
+                    providers: [],
+                    statuses: [],
+                    types: [],
+                    filters: { search, provider, status, type: eventType },
+                    messages: { success: req.flash('success'), error: req.flash('error') }
+                });
+            });
     };
 
     return {
@@ -518,7 +749,8 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         renderInvoice,
         renderRefundRequests,
         approveRefund,
-        denyRefund
+        denyRefund,
+        renderPaymentEvents
     };
 };
 

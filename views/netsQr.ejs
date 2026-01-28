@@ -6,7 +6,7 @@
       <div class="card shadow-sm">
         <div class="card-body text-center">
           <h3 class="mb-3"><%= title || 'Scan to Pay' %></h3>
-          <p class="text-muted mb-4">Scan the QR with your NETS Pay sandbox app to complete payment.</p>
+          <p class="text-muted mb-4">Scan the QR with your NETS Pay app to complete payment.</p>
           <p class="text-muted small mb-4" id="netsStatus">Waiting for NETS payment confirmation...</p>
           <% if (qrCodeUrl) { %>
             <img src="<%= qrCodeUrl %>" alt="NETS QR" class="img-fluid mb-3" style="max-width: 320px;">
@@ -32,14 +32,14 @@
 
           <div class="d-grid gap-2">
             <a href="/checkout" class="btn btn-outline-secondary">Back to checkout</a>
-            <a href="/payments/nets/fail?reason=cancelled&txn_retrieval_ref=<%= encodeURIComponent(txnRetrievalRef || '') %>" class="btn btn-outline-danger">
+            <a href="/checkout/failure?method=nets&reason=cancelled" class="btn btn-outline-danger">
               Cancel payment
             </a>
           </div>
         </div>
       </div>
       <div class="alert alert-info mt-3">
-        This flow uses the NETS sandbox. We will update this page once NETS confirms the payment.
+        We will update this page once NETS confirms the payment.
       </div>
     </div>
   </div>
@@ -61,7 +61,7 @@
 
     const redirectFail = (reason) => {
       source.close();
-      const target = `/payments/nets/fail?reason=${encodeURIComponent(reason || 'failed')}&txn_retrieval_ref=${encodeURIComponent(txnRetrievalRef)}`;
+      const target = `/checkout/failure?method=nets&reason=${encodeURIComponent(reason || 'failed')}`;
       window.location.href = target;
     };
 

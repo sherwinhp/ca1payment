@@ -1,0 +1,110 @@
+<%- include('partials/header', {
+  pageTitle: title || 'Processing Payment',
+  user,
+  bodyClass: 'payment-loading-page',
+  extraHead: `
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  `,
+  customStyles: `
+    :root {
+      --load-ink: #0f172a;
+      --load-muted: #64748b;
+      --load-accent: #2563eb;
+      --load-accent-soft: #dbeafe;
+      --load-card: #ffffff;
+      --load-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    body.payment-loading-page {
+      font-family: "Work Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(37, 99, 235, 0.18), transparent 55%),
+        linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+      color: var(--load-ink);
+    }
+    .payment-loading-wrap {
+      min-height: calc(100vh - 140px);
+      display: flex;
+      align-items: center;
+    }
+    .payment-loading-card {
+      border: 0;
+      border-radius: 22px;
+      box-shadow: var(--load-shadow);
+      background: var(--load-card);
+    }
+    .loading-title {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .loading-ring {
+      width: 76px;
+      height: 76px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--load-accent-soft);
+      color: var(--load-accent);
+    }
+    .loading-ring::after {
+      content: "";
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      border: 4px solid rgba(37, 99, 235, 0.2);
+      border-top-color: var(--load-accent);
+      animation: spin 1s linear infinite;
+      display: block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--load-accent-soft);
+      color: var(--load-accent);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .loading-note { color: var(--load-muted); }
+  `
+}) %>
+
+<%
+  const methodLower = String(method || '').toLowerCase();
+  let methodLabel = 'payment';
+  if (methodLower === 'paypal') methodLabel = 'PayPal';
+  if (methodLower === 'nets') methodLabel = 'NETS QR';
+  if (methodLower === 'card') methodLabel = 'card';
+%>
+
+<div class="container payment-loading-wrap py-5">
+  <div class="payment-loading-card mx-auto w-100" style="max-width: 640px;">
+    <div class="card-body p-4 p-md-5 text-center">
+      <div class="d-flex flex-column align-items-center gap-3 mb-4">
+        <div class="loading-ring" aria-hidden="true"></div>
+        <div>
+          <div class="text-uppercase small fw-semibold text-muted">Processing</div>
+          <h2 class="loading-title mb-0">Confirming your <%= methodLabel %> payment</h2>
+        </div>
+        <span class="loading-pill">Just a moment</span>
+      </div>
+      <p class="loading-note mb-0">We are validating the payment and preparing your order confirmation.</p>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
+
+<script>
+  (function redirectAfterDelay() {
+    const orderId = "<%= orderId %>";
+    if (!orderId) return;
+    setTimeout(() => {
+      window.location.href = `/checkout/success/${orderId}`;
+    }, 1800);
+  })();
+</script>

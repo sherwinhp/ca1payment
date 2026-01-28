@@ -20,15 +20,20 @@
   const formatPaymentLabel = (order) => {
     const method = String(order.payment_method || '').toLowerCase();
     const ref = String(order.payment_reference || '').toLowerCase();
+    const cardRef = ref.includes(':') ? ref.split(':')[0] : ref;
     if (method === 'card') {
-      if (ref === 'visa') return 'Paid by Visa card';
-      if (ref === 'mastercard') return 'Paid by Mastercard';
+      if (cardRef === 'visa') return 'Paid by Visa card';
+      if (cardRef === 'mastercard') return 'Paid by Mastercard';
       return 'Paid by card';
     }
     if (method === 'paypal') return 'Paid by PayPal';
     if (method === 'nets') return 'Paid by NETS QR';
     return method ? `Paid by ${method}` : 'Payment';
   };
+  const formatStatusLabel = (value) =>
+    String(value || '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
 %>
 <%- include('partials/header', { pageTitle: 'Order History', user, bodyClass: 'bg-light', customStyles: historyStyles }) %>
 
@@ -73,7 +78,7 @@
                   <small class="text-muted">Placed on <%= new Date(order.created_at).toLocaleString() %></small>
                 </div>
                 <div class="text-end">
-                  <div class="badge bg-primary status-badge"><%= order.status %></div>
+                  <div class="badge bg-primary status-badge"><%= formatStatusLabel(order.status) %></div>
                   <div class="fw-bold fs-5 mt-1">$<%= Number(order.total_amount).toFixed(2) %></div>
                   <small class="text-muted"><%= formatPaymentLabel(order) %></small>
                   <div class="mt-2">
@@ -83,6 +88,13 @@
                     <% if (order.refund_status) { %>
                       <% const refundClass = order.refund_status === 'approved' ? 'bg-success' : order.refund_status === 'denied' ? 'bg-danger' : 'bg-warning text-dark'; %>
                       <span class="badge <%= refundClass %> text-uppercase">Refund: <%= order.refund_status %></span>
+                      <% if (order.refund_status === 'approved') { %>
+                        <% const approved = Number(order.approved_amount || order.requested_amount || order.total_amount); %>
+                        <% const isPartial = approved < Number(order.total_amount); %>
+                        <div class="text-muted small mt-1">
+                          Approved refund: $<%= approved.toFixed(2) %> <%= isPartial ? '(Partial)' : '(Full)' %>
+                        </div>
+                      <% } %>
                       <% if (order.refund_status === 'denied' && order.refund_admin_note) { %>
                         <div class="text-muted small mt-1">Admin feedback: <%= order.refund_admin_note %></div>
                       <% } %>

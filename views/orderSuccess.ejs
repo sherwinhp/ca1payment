@@ -39,9 +39,9 @@
       letter-spacing: -0.02em;
     }
     .success-icon {
-      width: 58px;
-      height: 58px;
-      border-radius: 16px;
+      width: 62px;
+      height: 62px;
+      border-radius: 999px;
       background: linear-gradient(140deg, #22c55e 0%, #16a34a 100%);
       display: inline-flex;
       align-items: center;
@@ -103,12 +103,13 @@
 <%
   const paymentMethod = String(order.payment_method || '').toLowerCase();
   const paymentRef = String(order.payment_reference || '').toLowerCase();
+  const cardRef = paymentRef.includes(':') ? paymentRef.split(':')[0] : paymentRef;
   const isCard = paymentMethod === 'card';
   let cardBrand = '';
   if (isCard) {
-    if (paymentRef === 'visa') {
+    if (cardRef === 'visa') {
       cardBrand = 'visa';
-    } else if (paymentRef === 'mastercard') {
+    } else if (cardRef === 'mastercard') {
       cardBrand = 'mastercard';
     }
   }
@@ -138,7 +139,7 @@
           </div>
           <div>
             <div class="text-uppercase small fw-semibold text-muted">Success</div>
-            <h2 class="success-title mb-0">Order placed successfully</h2>
+            <h2 class="success-title mb-0">Order successfully placed</h2>
           </div>
         </div>
         <span class="success-pill text-uppercase"><%= order.status %></span>

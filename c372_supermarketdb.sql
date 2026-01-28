@@ -124,15 +124,23 @@ CREATE TABLE `refund_requests` (
   `user_id` int NOT NULL,
   `reason_text` text COLLATE utf8mb4_general_ci,
   `image_path` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `requested_amount` decimal(10,2) DEFAULT NULL,
+  `approved_amount` decimal(10,2) DEFAULT NULL,
   `status` varchar(20) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending',
   `admin_note` text COLLATE utf8mb4_general_ci,
+  `approved_by` int DEFAULT NULL,
+  `denied_by` int DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `denied_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_refund_order` (`order_id`),
   KEY `idx_refund_user` (`user_id`),
   CONSTRAINT `fk_refunds_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_refunds_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_refunds_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_refunds_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_refunds_denied_by` FOREIGN KEY (`denied_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -280,6 +288,18 @@ CREATE TABLE IF NOT EXISTS order_items (
   CONSTRAINT fk_orderitems_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS payment_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NULL,
+    provider VARCHAR(50) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    message TEXT NULL,
+    payload JSON NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payment_events_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS product_reviews (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
@@ -368,11 +388,115 @@ CREATE TABLE IF NOT EXISTS refund_requests (
   user_id INT NOT NULL,
   reason_text TEXT NULL,
   image_path VARCHAR(255) NULL,
+  requested_amount DECIMAL(10,2) NULL,
+  approved_amount DECIMAL(10,2) NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   admin_note TEXT NULL,
+  approved_by INT NULL,
+  denied_by INT NULL,
+  approved_at TIMESTAMP NULL,
+  denied_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY unique_refund_order (order_id),
   CONSTRAINT fk_refunds_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-  CONSTRAINT fk_refunds_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  CONSTRAINT fk_refunds_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_refunds_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_refunds_denied_by FOREIGN KEY (denied_by) REFERENCES users(id) ON DELETE SET NULL
 );
+
+SET @has_requested_amount := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'requested_amount'
+);
+SET @sql := IF(
+  @has_requested_amount = 0,
+  'ALTER TABLE refund_requests ADD COLUMN requested_amount DECIMAL(10,2) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_approved_amount := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'approved_amount'
+);
+SET @sql := IF(
+  @has_approved_amount = 0,
+  'ALTER TABLE refund_requests ADD COLUMN approved_amount DECIMAL(10,2) NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_approved_by := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'approved_by'
+);
+SET @sql := IF(
+  @has_approved_by = 0,
+  'ALTER TABLE refund_requests ADD COLUMN approved_by INT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_denied_by := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'denied_by'
+);
+SET @sql := IF(
+  @has_denied_by = 0,
+  'ALTER TABLE refund_requests ADD COLUMN denied_by INT NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_approved_at := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'approved_at'
+);
+SET @sql := IF(
+  @has_approved_at = 0,
+  'ALTER TABLE refund_requests ADD COLUMN approved_at TIMESTAMP NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_denied_at := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'refund_requests'
+    AND COLUMN_NAME = 'denied_at'
+);
+SET @sql := IF(
+  @has_denied_at = 0,
+  'ALTER TABLE refund_requests ADD COLUMN denied_at TIMESTAMP NULL',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

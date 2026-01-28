@@ -2,8 +2,9 @@
   const adminView = typeof isAdminView !== 'undefined' ? isAdminView : false;
   const paymentMethod = String(order.payment_method || '').toLowerCase();
   const paymentRef = String(order.payment_reference || '').toLowerCase();
+  const cardRef = paymentRef.includes(':') ? paymentRef.split(':')[0] : paymentRef;
   const isCard = paymentMethod === 'card';
-  const cardBrand = isCard && (paymentRef === 'visa' || paymentRef === 'mastercard') ? paymentRef : '';
+  const cardBrand = isCard && (cardRef === 'visa' || cardRef === 'mastercard') ? cardRef : '';
   let paymentLabel = 'Payment';
   if (isCard && cardBrand === 'visa') {
     paymentLabel = 'Paid by Visa card';

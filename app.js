@@ -131,6 +131,10 @@ app.use(express.static('public'));
 app.use(express.urlencoded({
     extended: false
 }));
+
+// Stripe webhook needs raw body for signature verification
+app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), paymentController.handleStripeWebhook);
+
 // enable JSON payloads (for PayPal SDK callbacks)
 app.use(express.json());
 
@@ -169,11 +173,16 @@ app.get('/payments/nets/complete', requireShopper, paymentController.finishNetsP
 app.post('/payments/nets/complete', requireShopper, paymentController.finishNetsPayment);
 app.get('/payments/nets/fail', requireShopper, paymentController.renderNetsFailure);
 app.get('/checkout/success/:orderId', requireShopper, cartController.renderOrderSuccess);
+app.get('/checkout/failure', requireShopper, paymentController.renderPaymentFailure);
+app.get('/checkout/loading', requireShopper, paymentController.renderPaymentLoading);
 app.get('/orders', requireShopper, cartController.renderOrderHistory);
 app.get('/orders/:id/invoice', requireShopper, cartController.renderInvoice);
 app.get('/orders/:id/refund', requireShopper, refundController.renderRefundForm);
 app.post('/orders/:id/refund', requireShopper, refundUpload.single('refundImage'), refundController.submitRefundRequest);
 app.get('/logout', authController.logout);
+
+app.post('/webhooks/paypal', paymentController.handlePaypalWebhook);
+app.post('/webhooks/nets', paymentController.handleNetsWebhook);
 
 app.get('/product/:id', productController.renderProductDetails);
 app.post('/product/:id/reviews', requireShopper, reviewController.submitProductReview);
@@ -194,11 +203,31 @@ app.post('/admin/users/:id/promote', checkAuthenticated, checkAdmin, adminContro
 app.post('/admin/users/:id/demote', checkAuthenticated, checkAdmin, adminController.demoteUser);
 app.post('/admin/users/:id/delete', checkAuthenticated, checkAdmin, adminController.deleteUser);
 app.get('/admin/orders', checkAuthenticated, checkAdmin, adminController.renderAllOrders);
-app.post('/admin/orders/:id/status', checkAuthenticated, checkAdmin, adminController.updateOrderStatus);
 app.get('/admin/orders/:id/invoice', checkAuthenticated, checkAdmin, adminController.renderInvoice);
 app.get('/admin/refunds', checkAuthenticated, checkAdmin, adminController.renderRefundRequests);
+app.get('/admin/refunds/full', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = '1';
+    next();
+}, adminController.renderRefundRequests);
+app.get('/admin/refunds/70', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = '0.7';
+    next();
+}, adminController.renderRefundRequests);
+app.get('/admin/refunds/50', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = '0.5';
+    next();
+}, adminController.renderRefundRequests);
+app.get('/admin/refunds/25', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = '0.25';
+    next();
+}, adminController.renderRefundRequests);
+app.get('/admin/refunds/other', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = 'other';
+    next();
+}, adminController.renderRefundRequests);
 app.post('/admin/refunds/:id/approve', checkAuthenticated, checkAdmin, adminController.approveRefund);
 app.post('/admin/refunds/:id/deny', checkAuthenticated, checkAdmin, adminController.denyRefund);
+app.get('/admin/payment-events', checkAuthenticated, checkAdmin, adminController.renderPaymentEvents);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port http://localhost:${PORT}`));

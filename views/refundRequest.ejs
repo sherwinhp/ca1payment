@@ -1,25 +1,120 @@
 <%
   const refundStyles = `
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap');
     body {
-      background: radial-gradient(circle at 15% 20%, #fee2e2 0, transparent 30%),
-                  radial-gradient(circle at 85% 20%, #e0f2fe 0, transparent 30%),
-                  #f8fafc;
-      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: radial-gradient(1200px 500px at 10% -10%, rgba(255, 99, 71, 0.18), transparent 55%),
+                  radial-gradient(900px 420px at 95% 10%, rgba(59, 130, 246, 0.18), transparent 60%),
+                  linear-gradient(180deg, #fef7f7 0%, #f8fafc 45%, #f1f5f9 100%);
+      font-family: 'Manrope', 'Segoe UI', sans-serif;
+      color: #0f172a;
     }
     .refund-card {
       border: none;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(6px);
+    }
+    .refund-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .refund-title {
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+    .refund-subtitle {
+      color: #475569;
+      margin-bottom: 0;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .info-tile {
+      padding: 0.75rem 0.9rem;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .info-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 0.25rem;
+    }
+    .info-value {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .reason-highlight {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(234, 88, 12, 0.14);
+      color: #c2410c;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+    .form-label {
+      font-weight: 700;
+      color: #1f2937;
+    }
+    .form-control, .form-select {
+      border-radius: 12px;
+      border-color: rgba(148, 163, 184, 0.4);
+      padding: 0.65rem 0.9rem;
+      box-shadow: none;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: #fb7185;
+      box-shadow: 0 0 0 0.2rem rgba(244, 63, 94, 0.15);
+    }
+    .section-card {
+      padding: 1.1rem;
       border-radius: 16px;
-      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+      background: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .btn-danger {
+      border-radius: 999px;
+      padding: 0.65rem 1.4rem;
+      box-shadow: 0 12px 24px rgba(239, 68, 68, 0.25);
+    }
+    .btn-outline-secondary {
+      border-radius: 999px;
+      padding: 0.65rem 1.2rem;
+    }
+    .fade-up {
+      animation: fadeUp 0.6s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   `;
 %>
 <%- include('partials/header', { pageTitle: 'Request Refund', user, bodyClass: 'bg-light', customStyles: refundStyles }) %>
 
 <div class="container py-5">
-  <div class="mb-4">
-    <p class="text-uppercase small text-danger fw-semibold mb-1">Refund request</p>
-    <h2 class="fw-bold mb-1">Order #<%= order.id %></h2>
-    <p class="text-muted small mb-0">Submit a reason and optional image for review by admin.</p>
+  <div class="refund-header">
+    <div>
+      <p class="text-uppercase small text-danger fw-semibold mb-1">Refund request</p>
+      <h2 class="refund-title">Order #<%= order.id %></h2>
+      <p class="refund-subtitle">Submit a reason and optional image for review by admin.</p>
+    </div>
+    <span class="badge bg-light text-dark border px-3 py-2">Support response within 24 hours</span>
   </div>
 
   <% if (messages && messages.error && messages.error.length) { %>
@@ -39,31 +134,83 @@
 
   <div class="card refund-card">
     <div class="card-body">
-      <div class="mb-3">
-        <div class="text-muted">Status: <span class="badge bg-primary text-uppercase"><%= order.status %></span></div>
-        <div class="text-muted">Payment method: <span class="text-capitalize"><%= order.payment_method %></span></div>
-        <div class="text-muted">Total: $<%= Number(order.total_amount).toFixed(2) %></div>
+      <div class="info-grid">
+        <div class="info-tile">
+          <div class="info-label">Status</div>
+          <div class="info-value"><span class="badge bg-primary text-uppercase"><%= order.status %></span></div>
+        </div>
+        <div class="info-tile">
+          <div class="info-label">Payment method</div>
+          <div class="info-value text-capitalize"><%= order.payment_method %></div>
+        </div>
+        <div class="info-tile">
+          <div class="info-label">Order total</div>
+          <div class="info-value">$<%= Number(order.total_amount).toFixed(2) %></div>
+        </div>
+        <% if (order.requested_amount) { %>
+          <div class="info-tile">
+            <div class="info-label">Requested refund</div>
+            <div class="info-value">$<%= Number(order.requested_amount).toFixed(2) %></div>
+          </div>
+        <% } %>
+        <% if (order.approved_amount) { %>
+          <div class="info-tile">
+            <div class="info-label">Approved refund</div>
+            <div class="info-value">$<%= Number(order.approved_amount).toFixed(2) %></div>
+          </div>
+        <% } %>
       </div>
 
       <% if (order.refund_id) { %>
-        <div class="alert alert-info mb-0">
+        <div class="alert alert-info mb-0 fade-up">
           A refund request is already <strong><%= order.refund_status %></strong> for this order.
           <% if (order.refund_status === 'denied' && order.refund_admin_note) { %>
             <div class="mt-2 text-muted">Admin feedback: <%= order.refund_admin_note %></div>
           <% } %>
         </div>
       <% } else if (!canRequest) { %>
-        <div class="alert alert-warning mb-0">
+        <div class="alert alert-warning mb-0 fade-up">
           Refund requests are only available for paid orders.
         </div>
       <% } else { %>
-        <form action="/orders/<%= order.id %>/refund" method="POST" enctype="multipart/form-data" class="row g-3">
-          <div class="col-12">
-            <label for="reason" class="form-label">Reason for refund</label>
-            <textarea class="form-control" id="reason" name="reason" rows="4" placeholder="Briefly describe the issue..."></textarea>
-            <div class="form-text">You can submit a reason, an image, or both.</div>
+        <form action="/orders/<%= order.id %>/refund" method="POST" enctype="multipart/form-data" class="row g-3 fade-up" data-order-total="<%= Number(order.total_amount).toFixed(2) %>">
+          <div class="col-12 section-card">
+            <label for="refundReason" class="form-label">Refund reason</label>
+            <select class="form-select" id="refundReason" name="refundReason" required>
+              <option value="wrong_item">Wrong item delivered</option>
+              <option value="delivery_late">Delivery arrived late</option>
+              <option value="damaged_item">Item damaged</option>
+              <option value="missing_items">Missing items</option>
+              <option value="other">Others</option>
+            </select>
+            <div class="d-flex align-items-center gap-2 mt-2">
+              <div class="form-text">Admin will review and approve the refund amount.</div>
+              <span id="othersBadge" class="reason-highlight d-none">Custom amount</span>
+            </div>
           </div>
-          <div class="col-12">
+          <div class="col-12 section-card">
+            <label for="reasonDetails" class="form-label">Additional details</label>
+            <textarea class="form-control" id="reasonDetails" name="reasonDetails" rows="3" placeholder="Add details (required for Others)"></textarea>
+            <div class="form-text">You can submit details, an image, or both.</div>
+          </div>
+          <div class="col-12 d-none section-card" id="refundAmountSection">
+            <label class="form-label d-block">Refund amount</label>
+            <div class="mt-2">
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                max="<%= Number(order.total_amount).toFixed(2) %>"
+                class="form-control"
+                id="requestedAmount"
+                name="requestedAmount"
+                placeholder="Enter amount to request"
+                disabled
+              >
+              <div class="form-text">Max: $<%= Number(order.total_amount).toFixed(2) %></div>
+            </div>
+          </div>
+          <div class="col-12 section-card">
             <label for="refundImage" class="form-label">Upload image (optional)</label>
             <input type="file" class="form-control" id="refundImage" name="refundImage" accept="image/*">
           </div>
@@ -79,3 +226,46 @@
 
 <%- include('partials/quickNav', { user, backToHref: '/orders', backToLabel: 'Back to orders' }) %>
 <%- include('partials/footer') %>
+
+<script>
+  (function refundAmountToggle() {
+    const form = document.querySelector('form[data-order-total]');
+    const amount = document.getElementById('requestedAmount');
+    const reason = document.getElementById('refundReason');
+    const details = document.getElementById('reasonDetails');
+    const amountSection = document.getElementById('refundAmountSection');
+    const othersBadge = document.getElementById('othersBadge');
+    if (!form || !amount || !reason || !details || !amountSection || !othersBadge) return;
+
+    const presets = {
+      wrong_item: 1,
+      delivery_late: 0.5,
+      damaged_item: 0.7,
+      missing_items: 0.25
+    };
+
+    const sync = () => {
+      const percent = presets[reason.value];
+      const isPreset = typeof percent === 'number';
+      if (isPreset) {
+        amount.disabled = true;
+        amount.value = '';
+        details.placeholder = 'Add details (optional)';
+        details.required = false;
+        amountSection.classList.add('d-none');
+        amountSection.hidden = true;
+        othersBadge.classList.add('d-none');
+      } else {
+        amountSection.classList.remove('d-none');
+        amountSection.hidden = false;
+        amount.disabled = false;
+        details.placeholder = 'Add details (required for Others)';
+        details.required = true;
+        othersBadge.classList.remove('d-none');
+      }
+    };
+
+    reason.addEventListener('change', sync);
+    sync();
+  })();
+</script>

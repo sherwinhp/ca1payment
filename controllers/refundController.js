@@ -16,7 +16,9 @@ const createRefundController = ({ connection }) => {
                 o.status,
                 rr.id AS refund_id,
                 rr.status AS refund_status,
-                rr.admin_note AS refund_admin_note
+                rr.admin_note AS refund_admin_note,
+                rr.requested_amount,
+                rr.approved_amount
             FROM orders o
             LEFT JOIN refund_requests rr ON rr.order_id = o.id
             WHERE o.id = ? AND o.user_id = ?
@@ -49,8 +51,10 @@ const createRefundController = ({ connection }) => {
     const submitRefundRequest = (req, res) => {
         const orderId = parseInt(req.params.id, 10);
         const userId = req.session.user.id;
-        const reason = (req.body.reason || '').trim();
+        const reasonCode = String(req.body.refundReason || 'other').trim().toLowerCase();
+        const reasonDetails = (req.body.reasonDetails || '').trim();
         const imagePath = req.file ? `/uploads/refunds/${req.file.filename}` : null;
+        const requestedAmountRaw = String(req.body.requestedAmount || '').trim();
 
         if (!Number.isInteger(orderId)) {
             req.flash('error', 'Invalid order selected.');
@@ -58,7 +62,7 @@ const createRefundController = ({ connection }) => {
         }
 
         const orderSQL = `
-            SELECT o.id, o.status, rr.id AS refund_id
+            SELECT o.id, o.status, o.total_amount, rr.id AS refund_id
             FROM orders o
             LEFT JOIN refund_requests rr ON rr.order_id = o.id
             WHERE o.id = ? AND o.user_id = ?
@@ -84,17 +88,51 @@ const createRefundController = ({ connection }) => {
                 return res.redirect(`/orders/${orderId}/refund`);
             }
 
-            if (!reason && !imagePath) {
-                req.flash('error', 'Please provide a reason or an image for the refund request.');
+            const orderTotal = Number(order.total_amount) || 0;
+            const reasonCatalog = {
+                wrong_item: { label: 'Wrong item delivered', percent: 1 },
+                delivery_late: { label: 'Delivery arrived late (50% refund)', percent: 0.5 },
+                damaged_item: { label: 'Item damaged (70% refund)', percent: 0.7 },
+                missing_items: { label: 'Missing items (25% refund)', percent: 0.25 },
+                other: { label: 'Other' }
+            };
+
+            const presetReason = reasonCatalog[reasonCode] || reasonCatalog.other;
+            if (reasonCode === 'other' && !reasonDetails && !imagePath) {
+                req.flash('error', 'Please provide details for the "Other" refund reason.');
                 return res.redirect(`/orders/${orderId}/refund`);
             }
 
+            let requestedAmount = orderTotal;
+            if (typeof presetReason.percent === 'number') {
+                requestedAmount = Number((orderTotal * presetReason.percent).toFixed(2));
+            } else {
+                const parsed = Number(requestedAmountRaw);
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    req.flash('error', 'Enter a valid refund amount.');
+                    return res.redirect(`/orders/${orderId}/refund`);
+                }
+                if (parsed > orderTotal) {
+                    req.flash('error', 'Requested amount cannot exceed the order total.');
+                    return res.redirect(`/orders/${orderId}/refund`);
+                }
+                requestedAmount = parsed;
+            }
+
             const insertSQL = `
-                INSERT INTO refund_requests (order_id, user_id, reason_text, image_path, status)
-                VALUES (?, ?, ?, ?, 'pending')
+                INSERT INTO refund_requests (order_id, user_id, reason_text, image_path, requested_amount, status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
             `;
 
-            connection.query(insertSQL, [orderId, userId, reason || null, imagePath], (insertErr) => {
+            let reasonText = presetReason.label && presetReason.label !== 'Other' ? presetReason.label : '';
+            if (reasonDetails) {
+                reasonText = reasonText ? `${reasonText} - ${reasonDetails}` : reasonDetails;
+            }
+            if (!reasonText) {
+                reasonText = null;
+            }
+
+            connection.query(insertSQL, [orderId, userId, reasonText, imagePath, requestedAmount], (insertErr) => {
                 if (insertErr) {
                     if (insertErr.code === 'ER_DUP_ENTRY') {
                         req.flash('error', 'A refund request already exists for this order.');

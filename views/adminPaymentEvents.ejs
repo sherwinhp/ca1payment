@@ -1,0 +1,155 @@
+<%
+  const pageStyles = `
+    body { background: #0b1220; color: #e2e8f0; font-family: 'Segoe UI','Helvetica Neue',Arial,sans-serif; }
+    .logs-hero {
+      background: linear-gradient(135deg, #6366f1, #22c55e);
+      border-radius: 22px;
+      color: #fff;
+      box-shadow: 0 25px 45px rgba(0,0,0,0.24);
+    }
+    .logs-card {
+      border: none;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      color: #e2e8f0;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+      backdrop-filter: blur(6px);
+    }
+    .table { color: #e2e8f0; background: rgba(255,255,255,0.03); }
+    .table > :not(caption) > * > * {
+      border-color: rgba(255,255,255,0.08);
+      background-color: transparent !important;
+      color: #e2e8f0;
+    }
+    .table-hover tbody tr:hover { background: rgba(255,255,255,0.06); }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+    }
+    .status-paid { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+    .status-failed { background: rgba(239, 68, 68, 0.2); color: #fecaca; }
+    .status-refunded { background: rgba(234, 179, 8, 0.2); color: #fde68a; }
+    .status-ignored { background: rgba(148, 163, 184, 0.2); color: #cbd5f5; }
+  `;
+%>
+<%- include('partials/header', { pageTitle: 'Payment Events', user, customStyles: pageStyles, bodyClass: 'bg-dark' }) %>
+
+<div class="container py-5">
+  <div class="logs-hero p-4 p-lg-5 mb-4 d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+      <p class="text-uppercase small mb-2" style="letter-spacing: 0.2rem;">Admin dashboard</p>
+      <h2 class="fw-bold mb-1">Payment event logs</h2>
+      <p class="mb-0">Latest payment updates from checkout and webhooks.</p>
+    </div>
+    <div>
+      <a href="/admin/orders" class="btn btn-outline-light">Back to orders</a>
+    </div>
+  </div>
+
+  <div class="card logs-card mb-4">
+    <div class="card-body">
+      <form class="row g-3 align-items-end" method="GET" action="/admin/payment-events">
+        <div class="col-12 col-lg-4">
+          <label class="form-label">Search</label>
+          <input
+            type="text"
+            name="q"
+            class="form-control"
+            placeholder="Order id, user, email, event, message"
+            value="<%= filters?.search || '' %>"
+          >
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Provider</label>
+          <select name="provider" class="form-select">
+            <option value="">All</option>
+            <% (providers || []).forEach(function(p) { %>
+              <option value="<%= p %>" <%= filters?.provider === p ? 'selected' : '' %>><%= p %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-6 col-lg-2">
+          <label class="form-label">Status</label>
+          <select name="status" class="form-select">
+            <option value="">All</option>
+            <% (statuses || []).forEach(function(s) { %>
+              <option value="<%= s %>" <%= filters?.status === s ? 'selected' : '' %>><%= s %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-12 col-lg-3">
+          <label class="form-label">Event type</label>
+          <select name="type" class="form-select">
+            <option value="">All</option>
+            <% (types || []).forEach(function(t) { %>
+              <option value="<%= t %>" <%= filters?.type === t ? 'selected' : '' %>><%= t %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-12 col-lg-1 d-grid">
+          <button type="submit" class="btn btn-light text-dark">Apply</button>
+        </div>
+        <div class="col-12 d-flex gap-2">
+          <a href="/admin/payment-events" class="btn btn-sm btn-outline-light">Clear filters</a>
+          <% if (filters?.search || filters?.provider || filters?.status || filters?.type) { %>
+            <span class="text-muted small align-self-center">Showing filtered results</span>
+          <% } %>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger logs-card mb-3">
+      <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
+
+  <% if (!events.length) { %>
+    <div class="alert alert-info logs-card">No payment events recorded yet.</div>
+  <% } else { %>
+    <div class="card logs-card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Order</th>
+                <th>Provider</th>
+                <th>Event</th>
+                <th>Status</th>
+                <th>User</th>
+                <th>Message</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% events.forEach(function(ev) { %>
+                <tr>
+                  <td><%= ev.id %></td>
+                  <td><%= ev.order_id ? '#' + ev.order_id : 'N/A' %></td>
+                  <td class="text-capitalize"><%= ev.provider %></td>
+                  <td><%= ev.event_type %></td>
+                  <td>
+                    <span class="status-pill status-<%= ev.status %>"><%= ev.status %></span>
+                  </td>
+                  <td><%= ev.username ? ev.username + ' (' + ev.email + ')' : 'N/A' %></td>
+                  <td><%= ev.message || '' %></td>
+                  <td><%= new Date(ev.created_at).toLocaleString() %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,137 @@
+<%- include('partials/header', {
+  pageTitle: title || 'Payment Unsuccessful',
+  user,
+  bodyClass: 'payment-fail-page',
+  extraHead: `
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  `,
+  customStyles: `
+    :root {
+      --fail-ink: #0f172a;
+      --fail-muted: #475569;
+      --fail-accent: #ef4444;
+      --fail-accent-soft: #fee2e2;
+      --fail-card: #ffffff;
+      --fail-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    body.payment-fail-page {
+      font-family: "Work Sans", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(248, 113, 113, 0.18), transparent 55%),
+        linear-gradient(180deg, #fef2f2 0%, #fff7ed 100%);
+      color: var(--fail-ink);
+    }
+    .payment-fail-wrap {
+      min-height: calc(100vh - 140px);
+      display: flex;
+      align-items: center;
+    }
+    .payment-fail-card {
+      border: 0;
+      border-radius: 22px;
+      box-shadow: var(--fail-shadow);
+      background: var(--fail-card);
+    }
+    .fail-title {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      letter-spacing: -0.02em;
+    }
+    .fail-icon {
+      width: 62px;
+      height: 62px;
+      border-radius: 999px;
+      background: linear-gradient(140deg, #ef4444 0%, #dc2626 100%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 12px 30px rgba(239, 68, 68, 0.25);
+    }
+    .fail-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--fail-accent-soft);
+      color: var(--fail-accent);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .fail-note {
+      color: var(--fail-muted);
+    }
+    .action-btn {
+      border-radius: 14px;
+      font-weight: 600;
+      padding: 12px 16px;
+    }
+  `
+}) %>
+
+<%
+  const methodLower = String(method || '').toLowerCase();
+  let payAgainHref = '/checkout';
+  if (methodLower === 'paypal') payAgainHref = '/checkout?autoPay=paypal#paypal-section';
+  if (methodLower === 'nets') payAgainHref = '/checkout?autoPay=nets#nets-section';
+  if (methodLower === 'card') payAgainHref = '/checkout?autoPay=card#card-section';
+  let methodLabel = 'payment';
+  if (methodLower === 'paypal') methodLabel = 'PayPal';
+  if (methodLower === 'nets') methodLabel = 'NETS QR';
+  if (methodLower === 'card') methodLabel = 'card';
+  let reasonText = '';
+  if (reason === 'cancelled') reasonText = 'Payment was cancelled.';
+  if (reason === 'timeout') reasonText = 'Payment timed out.';
+  if (reason === 'not_completed') reasonText = 'Payment was not completed.';
+  if (reason === 'failed') reasonText = 'Payment was declined.';
+  if (reason === 'error') reasonText = 'Something went wrong while processing the payment.';
+%>
+
+<div class="container payment-fail-wrap py-5">
+  <div class="payment-fail-card mx-auto w-100" style="max-width: 680px;">
+    <div class="card-body p-4 p-md-5">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+        <div class="d-flex align-items-center gap-3">
+          <div class="fail-icon">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6L6 18" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 6L18 18" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-uppercase small fw-semibold text-muted">Unsuccessful</div>
+            <h2 class="fail-title mb-0">Payment unsuccessful</h2>
+          </div>
+        </div>
+        <span class="fail-pill text-uppercase">Try again</span>
+      </div>
+
+      <p class="fail-note mb-4">
+        <%= reasonText || errorMsg || 'We could not complete your payment.' %>
+      </p>
+
+      <% if (responseCode || instructions) { %>
+        <div class="alert alert-light border rounded-3">
+          <% if (responseCode) { %>
+            <div class="small text-muted">Response code</div>
+            <div class="fw-semibold mb-2"><%= responseCode %></div>
+          <% } %>
+          <% if (instructions) { %>
+            <div class="small text-muted">Instructions</div>
+            <div class="fw-semibold"><%= instructions %></div>
+          <% } %>
+        </div>
+      <% } %>
+
+      <div class="d-grid gap-2 d-md-flex mt-4">
+        <a href="<%= payAgainHref %>" class="btn btn-danger action-btn flex-fill">Pay again with <%= methodLabel %></a>
+        <a href="/checkout" class="btn btn-outline-secondary action-btn flex-fill">Back to checkout</a>
+        <a href="/shopping" class="btn btn-outline-dark action-btn flex-fill">Back to shopping</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/footer') %>
