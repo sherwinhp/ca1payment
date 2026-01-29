@@ -177,6 +177,7 @@ app.get('/checkout/failure', requireShopper, paymentController.renderPaymentFail
 app.get('/checkout/loading', requireShopper, paymentController.renderPaymentLoading);
 app.get('/orders', requireShopper, cartController.renderOrderHistory);
 app.get('/orders/:id/invoice', requireShopper, cartController.renderInvoice);
+app.post('/orders/:id/invoice/email', requireShopper, cartController.sendInvoiceEmail);
 app.get('/orders/:id/refund', requireShopper, refundController.renderRefundForm);
 app.post('/orders/:id/refund', requireShopper, refundUpload.single('refundImage'), refundController.submitRefundRequest);
 app.get('/logout', authController.logout);
@@ -209,16 +210,12 @@ app.get('/admin/refunds/full', checkAuthenticated, checkAdmin, (req, res, next) 
     req.params.percent = '1';
     next();
 }, adminController.renderRefundRequests);
-app.get('/admin/refunds/70', checkAuthenticated, checkAdmin, (req, res, next) => {
-    req.params.percent = '0.7';
-    next();
-}, adminController.renderRefundRequests);
 app.get('/admin/refunds/50', checkAuthenticated, checkAdmin, (req, res, next) => {
     req.params.percent = '0.5';
     next();
 }, adminController.renderRefundRequests);
-app.get('/admin/refunds/25', checkAuthenticated, checkAdmin, (req, res, next) => {
-    req.params.percent = '0.25';
+app.get('/admin/refunds/20', checkAuthenticated, checkAdmin, (req, res, next) => {
+    req.params.percent = '0.2';
     next();
 }, adminController.renderRefundRequests);
 app.get('/admin/refunds/other', checkAuthenticated, checkAdmin, (req, res, next) => {

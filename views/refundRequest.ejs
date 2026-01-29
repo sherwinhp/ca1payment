@@ -177,10 +177,9 @@
           <div class="col-12 section-card">
             <label for="refundReason" class="form-label">Refund reason</label>
             <select class="form-select" id="refundReason" name="refundReason" required>
-              <option value="wrong_item">Wrong item delivered</option>
               <option value="delivery_late">Delivery arrived late</option>
-              <option value="damaged_item">Item damaged</option>
               <option value="missing_items">Missing items</option>
+              <option value="damaged_item">Items damaged</option>
               <option value="other">Others</option>
             </select>
             <div class="d-flex align-items-center gap-2 mt-2">
@@ -238,10 +237,9 @@
     if (!form || !amount || !reason || !details || !amountSection || !othersBadge) return;
 
     const presets = {
-      wrong_item: 1,
-      delivery_late: 0.5,
-      damaged_item: 0.7,
-      missing_items: 0.25
+      delivery_late: 0.2,
+      missing_items: 0.5,
+      damaged_item: 1
     };
 
     const sync = () => {

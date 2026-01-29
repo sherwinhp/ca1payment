@@ -1,7 +1,114 @@
+const nodemailer = require('nodemailer');
 const stripeService = require('../Services/stripe');
 
 const createCartController = ({ connection }) => {
     const PAYMENT_METHODS = ['card', 'paypal', 'nets'];
+    let invoiceMailer = null;
+
+    const getInvoiceMailer = () => {
+        if (process.env.EMAIL_DISABLED === 'true') return null;
+        if (invoiceMailer) return invoiceMailer;
+
+        const { EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS } = process.env;
+        if (!EMAIL_HOST || !EMAIL_PORT || !EMAIL_USER || !EMAIL_PASS) return null;
+
+        const port = Number(EMAIL_PORT);
+        invoiceMailer = nodemailer.createTransport({
+            host: EMAIL_HOST,
+            port,
+            secure: port === 465,
+            requireTLS: port !== 465,
+            auth: {
+                user: EMAIL_USER,
+                pass: EMAIL_PASS
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000
+        });
+
+        return invoiceMailer;
+    };
+
+    const buildInvoiceEmail = ({ order, items }) => {
+        const logoUrl = (process.env.EMAIL_LOGO_URL || '').trim();
+        const logoHtml = logoUrl
+            ? `<img src="${logoUrl}" alt="Sherwin Supermarket" style="height: 36px; display: block;" />`
+            : `<div style="font-size: 16px; font-weight: 700; color: #0f172a;">Sherwin Supermarket</div>`;
+        const subject = `Invoice for order #${order.id}`;
+        const lines = [
+            `Hi ${order.username || 'there'},`,
+            '',
+            `Here is your invoice for order #${order.id}.`,
+            '',
+            ...items.map((item) => {
+                const name = item.productName || item.product_name_snapshot || 'Product';
+                const qty = Number(item.quantity) || 0;
+                const price = Number(item.price_at_purchase || 0).toFixed(2);
+                return `- ${name} x${qty} @ $${price}`;
+            }),
+            '',
+            `Total: $${Number(order.total_amount || 0).toFixed(2)}`,
+            '',
+            'Thank you for shopping at Sherwin Supermarket.',
+            'Supermarket Support'
+        ];
+        const rowsHtml = items
+            .map((item) => {
+                const name = item.productName || item.product_name_snapshot || 'Product';
+                const qty = Number(item.quantity) || 0;
+                const price = Number(item.price_at_purchase || 0);
+                const lineTotal = qty * price;
+                return `
+                  <tr>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0;">${name}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; text-align: center;">${qty}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; text-align: right;">$${price.toFixed(2)}</td>
+                    <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; text-align: right;">$${lineTotal.toFixed(2)}</td>
+                  </tr>
+                `;
+            })
+            .join('');
+
+        const html = `
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; padding: 24px;">
+              <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+                  ${logoHtml}
+                </div>
+                <div style="padding: 24px;">
+                  <h2 style="margin: 0 0 6px; font-size: 20px; color: #0f172a;">Invoice for order #${order.id}</h2>
+                  <p style="margin: 0 0 16px; color: #475569;">Placed ${new Date(order.created_at).toLocaleString()}</p>
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; font-size: 14px; color: #0f172a;">
+                    <thead>
+                      <tr style="text-transform: uppercase; font-size: 12px; letter-spacing: 0.08em; color: #64748b;">
+                        <th style="text-align: left; padding-bottom: 8px;">Item</th>
+                        <th style="text-align: center; padding-bottom: 8px;">Qty</th>
+                        <th style="text-align: right; padding-bottom: 8px;">Unit</th>
+                        <th style="text-align: right; padding-bottom: 8px;">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rowsHtml}
+                      <tr>
+                        <td colspan="3" style="padding-top: 12px; text-align: right; font-weight: 700;">Grand total</td>
+                        <td style="padding-top: 12px; text-align: right; font-weight: 700; color: #2563eb;">$${Number(
+                            order.total_amount || 0
+                        ).toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p style="margin: 16px 0 0; color: #475569;">Thank you for shopping at Sherwin Supermarket.</p>
+                </div>
+                <div style="padding: 16px 24px; background: #f8fafc; font-size: 12px; color: #94a3b8;">
+                  Sherwin Supermarket Support
+                </div>
+              </div>
+            </div>
+        `;
+
+        return { subject, text: lines.join('\n'), html };
+    };
     const normalizeCardNumber = (value) => String(value || '').replace(/\D/g, '');
     const isValidCardNumber = (value) => {
         const digits = normalizeCardNumber(value);
@@ -497,8 +604,7 @@ const createCartController = ({ connection }) => {
                     }
                     const charge = intent.charges?.data?.[0];
                     const cardBrand = charge?.payment_method_details?.card?.brand || 'card';
-                    const chargeId = charge?.id || intent.id;
-                    const paymentReference = `${cardBrand}:${chargeId}`;
+                    const paymentReference = `${cardBrand}:${intent.id}`;
                     const outcome = charge?.outcome || null;
                     riskLevel = outcome?.risk_level || 'unknown';
                     const nextStatus = 'paid';
@@ -718,8 +824,89 @@ const createCartController = ({ connection }) => {
                     user: req.session.user,
                     order,
                     items,
-                    isAdminView: false
+                    isAdminView: false,
+                    messages: {
+                        error: req.flash('error'),
+                        success: req.flash('success')
+                    }
                 });
+            });
+        });
+    };
+
+    const sendInvoiceEmail = (req, res) => {
+        const userId = req.session.user.id;
+        const orderId = parseInt(req.params.id, 10);
+
+        if (!Number.isInteger(orderId)) {
+            req.flash('error', 'Invalid order selected.');
+            return res.redirect('/orders');
+        }
+
+        const orderSQL = `
+            SELECT o.id, o.total_amount, o.payment_method, o.status, o.created_at, o.payment_reference,
+                   u.username, u.email, u.address, u.contact
+            FROM orders o
+            INNER JOIN users u ON u.id = o.user_id
+            WHERE o.id = ? AND o.user_id = ?
+        `;
+
+        connection.query(orderSQL, [orderId, userId], (orderErr, orderRows = []) => {
+            if (orderErr || !orderRows.length) {
+                if (orderErr) {
+                    console.error('Unable to load invoice order:', orderErr);
+                }
+                req.flash('error', 'Order not found.');
+                return res.redirect('/orders');
+            }
+
+            const order = orderRows[0];
+            const itemsSQL = `
+                SELECT
+                    oi.product_id,
+                    oi.quantity,
+                    oi.price_at_purchase,
+                    oi.product_name_snapshot,
+                    oi.product_image_snapshot,
+                    p.productName,
+                    p.image
+                FROM order_items oi
+                LEFT JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id = ?
+                ORDER BY oi.id ASC
+            `;
+
+            connection.query(itemsSQL, [orderId], async (itemsErr, items = []) => {
+                if (itemsErr) {
+                    console.error('Unable to load invoice items for email:', itemsErr);
+                    req.flash('error', 'Unable to email invoice right now.');
+                    return res.redirect(`/orders/${orderId}/invoice`);
+                }
+
+                const mailer = getInvoiceMailer();
+                if (!mailer) {
+                    req.flash('error', 'Email is not configured. Please check email settings and try again.');
+                    return res.redirect(`/orders/${orderId}/invoice`);
+                }
+
+                const { subject, text, html } = buildInvoiceEmail({ order, items });
+                const message = {
+                    from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@supermarket.local',
+                    to: order.email,
+                    subject,
+                    text,
+                    html
+                };
+
+                try {
+                    await mailer.sendMail(message);
+                    req.flash('success', 'Invoice email sent to your registered email.');
+                } catch (emailErr) {
+                    console.error('Unable to send invoice email:', emailErr);
+                    req.flash('error', 'Unable to send invoice email right now. Please try again later.');
+                }
+
+                res.redirect(`/orders/${orderId}/invoice`);
             });
         });
     };
@@ -735,6 +922,7 @@ const createCartController = ({ connection }) => {
         renderOrderHistory,
         clearCart,
         renderInvoice,
+        sendInvoiceEmail,
         getCartForCheckout,
         createOrderFromCart
     };

@@ -62,6 +62,16 @@
 <%- include('partials/header', { pageTitle: 'Invoice', user, customStyles: invoiceStyles, bodyClass: adminView ? 'bg-dark' : 'bg-light' }) %>
 
 <div class="container py-5" style="max-width: 1000px;">
+  <% if (messages && messages.error && messages.error.length) { %>
+    <div class="alert alert-danger mb-3">
+      <% messages.error.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
+  <% if (messages && messages.success && messages.success.length) { %>
+    <div class="alert alert-success mb-3">
+      <% messages.success.forEach(function(msg) { %><div><%= msg %></div><% }); %>
+    </div>
+  <% } %>
   <!-- Header Section -->
   <div class="invoice-header-section">
     <div class="d-flex justify-content-between align-items-start mb-4">
@@ -71,16 +81,23 @@
           <div class="order-number mb-3">Order #<%= order.id %></div>
         <% } %>
         <div style="color: #94a3b8; font-size: 0.95rem;">
-          📅 Placed <%= new Date(order.created_at).toLocaleString() %>
+          Placed <%= new Date(order.created_at).toLocaleString() %>
         </div>
       </div>
       <div class="text-end">
         <div class="status-badge status-paid" style="display: inline-block;">
-          ✓ <%= order.status.toUpperCase() %>
+           <%= order.status.toUpperCase() %>
         </div>
         <button class="btn btn-outline-secondary btn-sm mt-3" onclick="window.print()" style="border-radius: 8px;">
-          🖨️ Print Invoice
+           Print Invoice
         </button>
+        <% if (!adminView) { %>
+          <form action="/orders/<%= order.id %>/invoice/email" method="POST" class="mt-2">
+            <button type="submit" class="btn btn-sm btn-primary" style="border-radius: 8px;">
+              Email invoice to me
+            </button>
+          </form>
+        <% } %>
       </div>
     </div>
 
@@ -88,15 +105,15 @@
     <div class="row mt-4 g-3">
       <div class="col-md-6">
         <div class="customer-info-card">
-          <div class="info-label">📦 Ship To</div>
+          <div class="info-label">Ship To</div>
           <% if (order.username) { %>
             <div class="info-value"><%= order.username %></div>
             <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 8px;"><%= order.email %></div>
             <% if (order.address) { %>
-              <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 8px;">📍 <%= order.address %></div>
+              <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 8px;">Address: <%= order.address %></div>
             <% } %>
             <% if (order.contact) { %>
-              <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 8px;">☎️ <%= order.contact %></div>
+              <div style="color: #94a3b8; font-size: 0.9rem; margin-top: 8px;">Contact: <%= order.contact %></div>
             <% } %>
           <% } else if (user) { %>
             <div class="info-value"><%= user.username %></div>
@@ -106,7 +123,7 @@
       </div>
       <div class="col-md-6">
         <div class="customer-info-card">
-          <div class="info-label">💳 Payment Details</div>
+          <div class="info-label">Payment Details</div>
           <div class="info-value"><%= paymentLabel %></div>
           <% if (isCard && cardBrand) { %>
             <div style="color: #94a3b8; font-size: 0.85rem; margin-top: 12px;">
@@ -127,7 +144,7 @@
   <!-- Order Items Section -->
   <div class="card invoice-card mb-4">
     <div class="card-body p-4">
-      <h5 class="mb-4" style="color: #1e293b; font-weight: 700;">📋 Order Items</h5>
+      <h5 class="mb-4" style="color: #1e293b; font-weight: 700;"> Order Items</h5>
       <div class="table-responsive">
         <table class="table align-middle" style="margin-bottom: 0;">
           <thead>
@@ -153,7 +170,7 @@
                   <% if (image) { %>
                     <img src="<%= image.startsWith('http') ? image : '/images/' + image %>" alt="<%= displayName %>" width="60" height="60" style="object-fit: cover;">
                   <% } else { %>
-                    <span style="color: #94a3b8; font-size: 0.9rem;">—</span>
+                    <span style="color: #94a3b8; font-size: 0.9rem;"></span>
                   <% } %>
                 </td>
                 <td style="text-align: center; font-weight: 500;"><%= item.quantity %></td>
@@ -164,7 +181,7 @@
           </tbody>
           <tfoot style="border-top: 2px solid rgba(59,130,246,0.2);">
             <tr>
-              <th colspan="4" style="text-align: right; padding-top: 20px; font-size: 1.1rem;">💰 Total:</th>
+              <th colspan="4" style="text-align: right; padding-top: 20px; font-size: 1.1rem;"> Total:</th>
               <th style="text-align: right; padding-top: 20px; font-size: 1.2rem; color: #3b82f6;">$<%= Number(order.total_amount || runningTotal).toFixed(2) %></th>
             </tr>
           </tfoot>
@@ -173,9 +190,9 @@
   <!-- Action Section -->
   <div class="d-flex justify-content-center gap-3 mt-5">
     <% if (adminView) { %>
-      <a href="/admin/orders" class="btn btn-outline-secondary" style="border-radius: 8px; padding: 10px 24px;">← Back to Orders</a>
+      <a href="/admin/orders" class="btn btn-outline-secondary" style="border-radius: 8px; padding: 10px 24px;"> Back to Orders</a>
     <% } else { %>
-      <a href="/orders" class="btn btn-outline-secondary" style="border-radius: 8px; padding: 10px 24px;">← Back to History</a>
+      <a href="/orders" class="btn btn-outline-secondary" style="border-radius: 8px; padding: 10px 24px;"> Back to History</a>
     <% } %>
   </div>
 </div>

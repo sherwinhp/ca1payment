@@ -1,8 +1,157 @@
+const nodemailer = require('nodemailer');
 const paypalService = require('../Services/paypal');
 const stripeService = require('../Services/stripe');
 
 const createAdminController = ({ connection, primaryAdminEmail }) => {
     const ORDER_STATUSES = ['pending', 'paid', 'failed', 'refunded', 'partially_refunded'];
+    let refundMailer = null;
+
+    const getRefundMailer = () => {
+        if (process.env.EMAIL_DISABLED === 'true') return null;
+        if (refundMailer) return refundMailer;
+
+        const { EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS } = process.env;
+        if (!EMAIL_HOST || !EMAIL_PORT || !EMAIL_USER || !EMAIL_PASS) return null;
+
+        const port = Number(EMAIL_PORT);
+        refundMailer = nodemailer.createTransport({
+            host: EMAIL_HOST,
+            port,
+            secure: port === 465,
+            requireTLS: port !== 465,
+            auth: {
+                user: EMAIL_USER,
+                pass: EMAIL_PASS
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 10000
+        });
+
+        return refundMailer;
+    };
+
+    const buildRefundEmail = ({ type, username, orderId, approvedAmount, status, adminNote, reasonText }) => {
+        const greeting = username ? `Hi ${username},` : 'Hi there,';
+        const isApproved = type === 'approved';
+        const subject = isApproved
+            ? `Refund approved for order #${orderId}`
+            : `Refund update for order #${orderId}`;
+        const amountText = isApproved ? Number(approvedAmount || 0).toFixed(2) : null;
+        const statusText = status === 'partially_refunded' ? 'Partial refund' : 'Full refund';
+        const noteLine = adminNote ? `Admin note: ${adminNote}` : 'Admin note: (none)';
+        const reasonLine = reasonText
+            ? `Please accept our sincere apologies for "${reasonText}".`
+            : 'Please accept our sincere apologies for any inconvenience caused.';
+        const textLines = [
+            greeting,
+            '',
+            isApproved
+                ? `Your refund has been approved for order #${orderId}.`
+                : `Your refund request for order #${orderId} has been denied.`,
+            reasonLine,
+            isApproved ? `Approved amount: $${amountText} (${statusText}).` : null,
+            noteLine,
+            '',
+            'If you have any questions, please reply to this email.',
+            '',
+            'Thank you for your understanding.',
+            'Sherwin Supermarket Support'
+        ].filter(Boolean);
+
+        const logoUrl = (process.env.EMAIL_LOGO_URL || '').trim();
+        const logoHtml = logoUrl
+            ? `<img src="${logoUrl}" alt="Sherwin Supermarket" style="height: 36px; display: block;" />`
+            : `<div style="font-size: 16px; font-weight: 700; color: #0f172a;">Sherwin Supermarket</div>`;
+
+        const iconSvg = isApproved
+            ? `<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+                 <circle cx="22" cy="22" r="20" fill="#16a34a" />
+                 <path d="M14 22.5l5 5 11-12" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+               </svg>`
+            : `<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+                 <circle cx="22" cy="22" r="20" fill="#dc2626" />
+                 <path d="M16 16l12 12M28 16l-12 12" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" />
+               </svg>`;
+
+        const html = `
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; padding: 24px;">
+              <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+                  ${logoHtml}
+                </div>
+                <div style="padding: 20px 24px; background: ${isApproved ? '#16a34a' : '#dc2626'}; color: #ffffff;">
+                  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="width: 52px; vertical-align: middle;">${iconSvg}</td>
+                      <td style="vertical-align: middle;">
+                        <h2 style="margin: 0; font-size: 20px;">${isApproved ? 'Refund Approved' : 'Refund Denied'}</h2>
+                        <p style="margin: 6px 0 0; font-size: 14px;">Order #${orderId}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+                <div style="padding: 24px;">
+                  <p style="margin: 0 0 12px; font-size: 16px; color: #0f172a;">${greeting}</p>
+                  <p style="margin: 0 0 16px; font-size: 15px; color: #334155;">
+                    ${isApproved
+                        ? 'Your refund has been approved. Details are below.'
+                        : 'Your refund request has been reviewed and unfortunately was denied.'}
+                  </p>
+                  <p style="margin: 0 0 16px; font-size: 14px; color: #475569;">${reasonLine}</p>
+                  <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em;">Refund summary</div>
+                    <div style="margin-top: 8px; font-size: 14px; color: #0f172a;">
+                      <div><strong>Status:</strong> ${isApproved ? statusText : 'Denied'}</div>
+                      ${isApproved ? `<div><strong>Amount:</strong> $${amountText}</div>` : ''}
+                      <div><strong>${noteLine.split(':')[0]}:</strong> ${noteLine.split(':').slice(1).join(':').trim() || '(none)'}</div>
+                    </div>
+                  </div>
+                  <p style="margin: 0 0 12px; font-size: 14px; color: #475569;">If you have any questions, please reply to this email.</p>
+                  <p style="margin: 0; font-size: 14px; color: #475569;">Thank you for shopping at Sherwin Supermarket.</p>
+                </div>
+                <div style="padding: 16px 24px; background: #f8fafc; font-size: 12px; color: #94a3b8;">
+                  Sherwin Supermarket Support
+                </div>
+              </div>
+            </div>
+        `;
+
+        return {
+            subject,
+            text: textLines.join('\n'),
+            html
+        };
+    };
+
+    const sendRefundEmail = async ({ to, username, orderId, approvedAmount, status, adminNote, type, reasonText }) => {
+        if (!to) return;
+
+        const mailer = getRefundMailer();
+        const { subject, text, html } = buildRefundEmail({
+            type,
+            username,
+            orderId,
+            approvedAmount,
+            status,
+            adminNote,
+            reasonText
+        });
+        const message = {
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@supermarket.local',
+            to,
+            subject,
+            text,
+            html
+        };
+
+        if (!mailer) {
+            console.log('Refund email not sent (missing EMAIL config):', message);
+            return;
+        }
+
+        await mailer.sendMail(message);
+    };
 
     const logPaymentEvent = ({ orderId = null, provider, eventType, status, message = null, payload = null }) => {
         const sql = `
@@ -376,7 +525,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
     const renderRefundRequests = (req, res) => {
         const rawPercent = String(req.params.percent || req.query.percent || '').trim();
         const percent = rawPercent ? Number(rawPercent) : null;
-        const allowedPercents = [1, 0.7, 0.5, 0.25];
+        const allowedPercents = [1, 0.5, 0.2];
         const hasFilter = Number.isFinite(percent) && allowedPercents.includes(percent);
         const isOtherFilter = rawPercent === 'other';
         const refundsParams = [];
@@ -394,9 +543,8 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
             WHERE rr.requested_amount IS NOT NULL
               AND o.total_amount IS NOT NULL
               AND ABS(rr.requested_amount - (o.total_amount * 1)) > 0.01
-              AND ABS(rr.requested_amount - (o.total_amount * 0.7)) > 0.01
               AND ABS(rr.requested_amount - (o.total_amount * 0.5)) > 0.01
-              AND ABS(rr.requested_amount - (o.total_amount * 0.25)) > 0.01
+              AND ABS(rr.requested_amount - (o.total_amount * 0.2)) > 0.01
             `;
         }
 
@@ -467,7 +615,7 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
         }
 
         connection.query(
-            'SELECT id, order_id, status, requested_amount FROM refund_requests WHERE id = ?',
+            'SELECT id, order_id, status, requested_amount, reason_text FROM refund_requests WHERE id = ?',
             [refundId],
             (lookupErr, rows = []) => {
                 if (lookupErr || !rows.length) {
@@ -485,9 +633,11 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                 }
 
                 const orderLookupSQL = `
-                    SELECT id, total_amount, payment_method, payment_reference
-                    FROM orders
-                    WHERE id = ?
+                    SELECT o.id, o.total_amount, o.payment_method, o.payment_reference,
+                           u.email AS user_email, u.username AS user_name
+                    FROM orders o
+                    INNER JOIN users u ON u.id = o.user_id
+                    WHERE o.id = ?
                 `;
 
                 connection.query(orderLookupSQL, [refund.order_id], async (orderErr, orderRows = []) => {
@@ -516,13 +666,17 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                         }
                         approvedAmount = parsed;
                     }
+                    const isPartial = approvedAmount < orderTotal - 0.009;
                     if (order.payment_method === 'paypal') {
                         if (!order.payment_reference) {
                             req.flash('error', 'Missing PayPal capture ID for this order.');
                             return res.redirect('/admin/refunds');
                         }
                         try {
-                            await paypalService.refundCapture(order.payment_reference, approvedAmount);
+                            await paypalService.refundCapture(
+                                order.payment_reference,
+                                isPartial ? approvedAmount : null
+                            );
                         } catch (apiErr) {
                             console.error('PayPal refund failed:', apiErr);
                             req.flash('error', apiErr.message || 'PayPal refund failed.');
@@ -536,7 +690,10 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                             return res.redirect('/admin/refunds');
                         }
                         try {
-                            await stripeService.refundCharge({ chargeId, amount: approvedAmount });
+                            await stripeService.refundCharge({
+                                chargeId,
+                                amount: isPartial ? approvedAmount : null
+                            });
                         } catch (apiErr) {
                             console.error('Stripe refund failed:', apiErr);
                             req.flash('error', apiErr.message || 'Stripe refund failed.');
@@ -581,6 +738,18 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                                         status: nextStatus,
                                         message: adminNote || `Refund approved: $${approvedAmount.toFixed(2)}`
                                     });
+                                    sendRefundEmail({
+                                        to: order.user_email,
+                                        username: order.user_name,
+                                        orderId: refund.order_id,
+                                        approvedAmount,
+                                        status: nextStatus,
+                                        adminNote,
+                                        reasonText: refund.reason_text,
+                                        type: 'approved'
+                                    }).catch((emailErr) => {
+                                        console.error('Unable to send refund approval email:', emailErr);
+                                    });
                                     req.flash(
                                         'success',
                                         `Refund approved for order #${refund.order_id} (${nextStatus.replace('_', ' ')}).`
@@ -622,6 +791,32 @@ const createAdminController = ({ connection, primaryAdminEmail }) => {
                 req.flash('error', 'Refund request is already processed or not found.');
             } else {
                 req.flash('success', 'Refund request denied.');
+                const lookupSQL = `
+                    SELECT rr.order_id, rr.reason_text, u.email AS user_email, u.username AS user_name
+                    FROM refund_requests rr
+                    INNER JOIN orders o ON o.id = rr.order_id
+                    INNER JOIN users u ON u.id = o.user_id
+                    WHERE rr.id = ?
+                `;
+                connection.query(lookupSQL, [refundId], (lookupErr, rows = []) => {
+                    if (lookupErr || !rows.length) {
+                        if (lookupErr) {
+                            console.error('Unable to load refund email recipient:', lookupErr);
+                        }
+                        return;
+                    }
+                    const recipient = rows[0];
+                    sendRefundEmail({
+                        to: recipient.user_email,
+                        username: recipient.user_name,
+                        orderId: recipient.order_id,
+                        adminNote,
+                        reasonText: recipient.reason_text,
+                        type: 'denied'
+                    }).catch((emailErr) => {
+                        console.error('Unable to send refund denied email:', emailErr);
+                    });
+                });
             }
             res.redirect('/admin/refunds');
         });

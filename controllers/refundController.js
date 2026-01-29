@@ -90,10 +90,9 @@ const createRefundController = ({ connection }) => {
 
             const orderTotal = Number(order.total_amount) || 0;
             const reasonCatalog = {
-                wrong_item: { label: 'Wrong item delivered', percent: 1 },
-                delivery_late: { label: 'Delivery arrived late (50% refund)', percent: 0.5 },
-                damaged_item: { label: 'Item damaged (70% refund)', percent: 0.7 },
-                missing_items: { label: 'Missing items (25% refund)', percent: 0.25 },
+                delivery_late: { label: 'Delivery arrived late', percent: 0.2 },
+                missing_items: { label: 'Missing items', percent: 0.5 },
+                damaged_item: { label: 'Items damaged', percent: 1 },
                 other: { label: 'Other' }
             };
 

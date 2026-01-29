@@ -48,6 +48,13 @@
     }
     .stat-label { color: rgba(226, 232, 240, 0.7); font-size: 0.85rem; }
     .stat-value { font-size: 1.5rem; font-weight: 700; }
+    .text-muted { color: rgba(226, 232, 240, 0.78) !important; }
+    .orders-card .text-muted { color: rgba(226, 232, 240, 0.9) !important; }
+    .orders-card small { color: rgba(226, 232, 240, 0.9) !important; }
+    ::selection { background: #2563eb !important; color: #ffffff !important; }
+    ::-moz-selection { background: #2563eb !important; color: #ffffff !important; }
+    *::selection { background: #2563eb !important; color: #ffffff !important; }
+    *::-moz-selection { background: #2563eb !important; color: #ffffff !important; }
   `;
 %>
 <%- include('partials/header', { pageTitle: 'All Orders', user, customStyles: adminOrdersStyles, bodyClass: 'bg-dark' }) %>

@@ -5,6 +5,11 @@
     .refunds-card .table { color: #e2e8f0; }
     .refunds-card .table td, .refunds-card .table th { border-color: rgba(148, 163, 184, 0.25); }
     .badge-status { text-transform: uppercase; letter-spacing: 0.08em; }
+    .alert { color: #e2e8f0; }
+    .alert-danger { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); }
+    .alert-success { background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.4); }
+    .alert-info { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); }
+    .text-muted { color: rgba(226, 232, 240, 0.75) !important; }
   `;
 %>
 <%- include('partials/header', { pageTitle: 'Refund Requests', user, bodyClass: 'bg-dark', customStyles: refundsStyles }) %>
@@ -24,9 +29,8 @@
     <% const isActive = (value) => activePercent === value; %>
     <a href="/admin/refunds" class="btn btn-sm <%= activePercent === null ? 'btn-light' : 'btn-outline-light' %>">All</a>
     <a href="/admin/refunds/full" class="btn btn-sm <%= isActive(1) ? 'btn-light' : 'btn-outline-light' %>">Full (100%)</a>
-    <a href="/admin/refunds/70" class="btn btn-sm <%= isActive(0.7) ? 'btn-light' : 'btn-outline-light' %>">70%</a>
     <a href="/admin/refunds/50" class="btn btn-sm <%= isActive(0.5) ? 'btn-light' : 'btn-outline-light' %>">50%</a>
-    <a href="/admin/refunds/25" class="btn btn-sm <%= isActive(0.25) ? 'btn-light' : 'btn-outline-light' %>">25%</a>
+    <a href="/admin/refunds/20" class="btn btn-sm <%= isActive(0.2) ? 'btn-light' : 'btn-outline-light' %>">20%</a>
     <a href="/admin/refunds/other" class="btn btn-sm <%= filterOther ? 'btn-light' : 'btn-outline-light' %>">Others</a>
   </div>
 
@@ -50,7 +54,7 @@
       <div class="alert alert-info refunds-card mb-3">
         <div class="fw-semibold mb-1">Refund reason guide (auto-calculated presets)</div>
         <div class="small text-muted">
-          Wrong item delivered = 100% · Delivery arrived late = 50% · Item damaged = 70% · Missing items = 25% · Others = custom amount
+          Delivery arrived late = 20% - Missing items = 50% - Items damaged = 100% - Others = custom amount
         </div>
       </div>
       <% if (!refunds.length) { %>
@@ -75,7 +79,7 @@
                 <tr>
                   <td>
                     <a href="/admin/orders/<%= refund.order_id %>/invoice" class="text-decoration-none text-light">#<%= refund.order_id %></a><br>
-                    <small class="text-muted">$<%= Number(refund.total_amount).toFixed(2) %> · <%= refund.payment_method %></small>
+                    <small class="text-muted">$<%= Number(refund.total_amount).toFixed(2) %> - <%= refund.payment_method %></small>
                   </td>
                   <td>
                     <div><%= refund.username %></div>
